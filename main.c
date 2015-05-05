@@ -17,6 +17,8 @@ struct command *construct_commands()
 	cur = root->child;
 	cur->next = construct_affine_cmd();
 	cur = cur->next;
+	cur->next = construct_substitution_cmd();
+	cur = cur->next;
 	// cur->next = construct_other_cmd()
 	// cur = cur->next;
 	return root;
