@@ -88,22 +88,24 @@ static void affine_decrypt(int argc, char **argv)
 static void affine_analyze(int argc, char **argv)
 {
 	size_t i, datalen;
+	int a, b;
 	char *plain;
-	unsigned char affinedata[1];
 	double freqmap[FREQMAP_LEN];
 	datalen = strlen(argv[0]);
 	plain = alloca(datalen+1);
 	plain[datalen] = 0;
-	for(i=0; i<ALPHABET_EN_LEN; ++i) {
+	for(i=0; i<ALPHABET_EN_PRIME_LEN; ++i) {
 		double score;
-		affinedata[0] = i;
-		cipher_shift((unsigned char *)argv[0], datalen, 
-				affinedata, 1, alphabet_en, ALPHABET_EN_LEN,
-				(unsigned char *)plain);
-		freqmap_calc((unsigned char *)plain, datalen, freqmap);
-		score = freqmap_comp(freqmap, freqmap_en);
-		if(score > 0.05) {
-			printf("Possible K = %ld, plaintext: %s\n", i, plain);
+		a = alphabet_en_primes[i];
+		for(b=0; b<ALPHABET_EN_LEN; ++b) {
+			cipher_affine((unsigned char *)argv[0], datalen,
+				a, b,
+				alphabet_en, ALPHABET_EN_LEN, (unsigned char *)plain);
+			freqmap_calc((unsigned char *)plain, datalen, freqmap);
+			score = freqmap_comp(freqmap, freqmap_en);
+			if(score > 0.05) {
+				printf("Possible a,b = %d, %d, score: %lf, plaintext: %s\n", a, b, score, plain);
+			}
 		}
 	}
 }

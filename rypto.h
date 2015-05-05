@@ -11,7 +11,11 @@
 extern double freqmap_en[FREQMAP_LEN];
 
 #define ALPHABET_EN_LEN 26
+#define ALPHABET_EN_PRIME_LEN 12
 extern unsigned char alphabet_en[ALPHABET_EN_LEN];
+extern int alphabet_en_primes[ALPHABET_EN_PRIME_LEN];
+
+
 int cipher_shift(unsigned char *data, size_t datalen, unsigned char *shiftdata,
 		size_t shiftlen, unsigned char *alphabet, size_t alphabetlen, unsigned char *out);
 void freqmap_calc(unsigned char *data, size_t datalen, double *out);
