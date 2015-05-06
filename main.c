@@ -19,6 +19,10 @@ struct command *construct_commands()
 	cur = cur->next;
 	cur->next = construct_substitution_cmd();
 	cur = cur->next;
+	cur->next = construct_matasano_cmd();
+	cur = cur->next;
+	cur->next = construct_xor_cmd();
+	cur = cur->next;
 	// cur->next = construct_other_cmd()
 	// cur = cur->next;
 	return root;

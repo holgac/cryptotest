@@ -18,16 +18,62 @@ extern int alphabet_en_primes[ALPHABET_EN_PRIME_LEN];
 extern double bigram_en[ALPHABET_EN_LEN][ALPHABET_EN_LEN];
 void load_bigrams();
 
+extern char *base64_map;
+extern unsigned char base64_rmap[128];
+
 int cipher_shift(unsigned char *data, size_t datalen, unsigned char *shiftdata,
 		size_t shiftlen, unsigned char *alphabet, size_t alphabetlen, unsigned char *out);
 void freqmap_calc(unsigned char *data, size_t datalen, double *out);
+void freqmap_pcalc_xor(unsigned char *data, size_t datalen, unsigned char k, size_t interval, double *out);
 double freqmap_comp(double *f1, double *f2);
 int cipher_affine(unsigned char *data, size_t datalen,
 		int a, int b, unsigned char *alphabet, size_t alphabetlen, unsigned char *out);
 int cipher_substitution(unsigned char *data, size_t datalen, unsigned char *sortedalphabet,
 		unsigned char *alphabet, size_t alphabetlen, unsigned char *out);
+void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t keylen,
+		unsigned char *out);
 
 double bigram_fitness(unsigned char *data, size_t datalen);
+
+/*
+ * horizontally rearranges memory so that
+ * out[0] = data[0]
+ * out[1] = data[vertsize]
+ * ...
+ * out[datalen/vertsize] = data[1]
+ */
+void hor_arrange(const unsigned char *data, size_t datalen, size_t vertsize, unsigned char *out);
+/*
+ * Calculates kasiski stats for given data.
+ * returns normalized data.
+ */
+void kasiski_calc(const unsigned char *data, size_t datalen, double *out, size_t outlen);
+
+/*
+ * converts hex string of len len to
+ * data of len len/2.
+ * data should have enough memory in advance.
+ */
+void from_hex(const char *hex, size_t len, unsigned char *data);
+/*
+ * converts data of len len to
+ * hex string of len len*2.
+ * data should have enough memory in advance
+ */
+void to_hex(const unsigned char *data, size_t len, char *hex);
+/*
+ * converts data of len len
+ * to base64 of len ceil(len * 4/3)
+ * base64 should have enough memory in advance.
+ */
+void to_base64(const unsigned char *data, size_t len, char *base64);
+/*
+ * convert base64 of len len
+ * to data of ceil(len * 3/4)
+ * data should have enough memory in advance.
+ */
+void from_base64(const char *base64, size_t len, unsigned char *data);
+
 /*
  * for ax + by = gcd(a,b)
  * returns [gcd(a,b), x, y]
@@ -35,6 +81,8 @@ double bigram_fitness(unsigned char *data, size_t datalen);
  * x = a^-1 modulo b
  */
 void extended_euclid(long a, long b, long *out);
+
+size_t edit_dist(unsigned char *d1, unsigned char *d2, size_t len);
 
 #define CMDLEN 16
 
@@ -49,5 +97,7 @@ struct command {
 struct command *construct_shift_cmd();
 struct command *construct_affine_cmd();
 struct command *construct_substitution_cmd();
+struct command *construct_matasano_cmd();
+struct command *construct_xor_cmd();
 
 #endif

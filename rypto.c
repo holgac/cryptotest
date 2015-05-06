@@ -17,7 +17,14 @@ unsigned char alphabet_en[ALPHABET_EN_LEN] = {'A', 'B', 'C', 'D', 'E', 'F', 'G',
 
 int alphabet_en_primes[ALPHABET_EN_PRIME_LEN] = {1,3,5,7,9,11,15,17,19,21,23,25};
 double bigram_en[ALPHABET_EN_LEN][ALPHABET_EN_LEN];
-
+char *base64_map = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+unsigned char base64_rmap[128] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1,
+		-1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+		-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+		20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, 32,
+		33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
 void load_bigrams()
 {
 	unsigned long bigram_enl[ALPHABET_EN_LEN][ALPHABET_EN_LEN];
@@ -49,7 +56,7 @@ static ssize_t find_in_data(unsigned char *alphabet, size_t len, unsigned char c
 			return i;
 	return -1;
 }
-static char get_freqmap_idx(unsigned char c)
+static int get_freqmap_idx(unsigned char c)
 {
 	if(c >= 'A' && c <= 'Z')
 		return c-'A';
@@ -64,7 +71,7 @@ double bigram_fitness(unsigned char *data, size_t datalen)
 	double cur_fitness = 0;
 	size_t i;
 	for(i=0; i<datalen-1; ++i) {
-		char i1, i2;
+		int i1, i2;
 		i1 = get_freqmap_idx(data[i]);
 		i2 = get_freqmap_idx(data[i+1]);
 		if(i1 < 0 || i2 < 0) {
@@ -76,9 +83,29 @@ double bigram_fitness(unsigned char *data, size_t datalen)
 	return cur_fitness;
 }
 
+void freqmap_pcalc_xor(unsigned char *data, size_t datalen, unsigned char k, size_t interval, double *out)
+{
+	size_t i;
+	double fact;
+	for(i=0; i<FREQMAP_LEN; ++i)
+		out[i] = 0.0;
+	for(i=0; i<datalen; i += interval) {
+		unsigned char v;
+		char idx;
+		v = data[i] ^ k;
+		idx = get_freqmap_idx(v);
+		if(idx != -1)
+			out[(size_t)idx] += 1;
+	}
+	fact = interval * 1.0 / datalen;
+	for(i=0; i<FREQMAP_LEN; ++i)
+		out[i] *= fact;
+}
+
 void freqmap_calc(unsigned char *data, size_t datalen, double *out)
 {
 	size_t i;
+	double invdatalen = 1.0 / datalen;
 	for(i=0; i<FREQMAP_LEN; ++i)
 		out[i] = 0.0;
 	for(i=0; i<datalen; ++i) {
@@ -87,7 +114,7 @@ void freqmap_calc(unsigned char *data, size_t datalen, double *out)
 			out[(size_t)idx] += 1;
 	}
 	for(i=0; i<FREQMAP_LEN; ++i)
-		out[i] /= datalen;
+		out[i] *= invdatalen;
 
 }
 
@@ -167,6 +194,175 @@ int cipher_substitution(unsigned char *data, size_t datalen, unsigned char *sort
 	}
 	return 0;
 }
+
+static ssize_t hex_to_dec(char c)
+{
+	if(c >= '0' && c <= '9')
+		return c - '0';
+	if(c >= 'A' && c <= 'F')
+		return c + 10 - 'A';
+	if(c >= 'a' && c <= 'f')
+		return c + 10 - 'a';
+	return -1;
+}
+void from_hex(const char *hex, size_t len, unsigned char *data)
+{
+	size_t i;
+	for(i=0; i<len; i += 2)
+		data[i/2] = (hex_to_dec(hex[i])<<4) | (hex_to_dec(hex[i+1]));
+}
+static void pto_base64(unsigned char d1, unsigned char d2, unsigned char d3,
+		char *target)
+{
+		target[0] = base64_map[d1 >> 2];
+		target[1] = base64_map[((d1 & 0x3)<<4) | (d2 >> 4)];
+		target[2] = base64_map[((d2 & 0x0f)<< 2) | (d3 >> 6)];
+		target[3] = base64_map[d3 & 0x3f];
+}
+void to_base64(const unsigned char *data, size_t len, char *base64)
+{
+	size_t bi=0, i;
+	for(i=0; i<(len-2); i+=3) {
+		pto_base64(data[i], data[i+1], data[i+2], base64+bi);
+		bi += 4;
+	}
+	if(i < len) {
+		unsigned char d1, d2=0;
+		d1 = data[i];
+		if(i < (len-1))
+			d2 = data[i+1];
+		pto_base64(d1, d2, 0, base64+bi);
+		bi += 4;
+	}
+	base64[bi] = 0;
+}
+void pto_hex(unsigned char data, char *hex)
+{
+	if(data < 10)
+		hex[0] = '0' + data;
+	else
+		hex[0] = 'A' + data - 10;
+}
+void to_hex(const unsigned char *data, size_t len, char *hex)
+{
+	size_t i;
+	for(i=0;i<len; ++i) {
+		pto_hex(data[i] >> 4, hex + 2*i);
+		pto_hex(data[i] & 0x0f, hex + 2*i + 1);
+	}
+}
+static ssize_t find_in_data(unsigned char *alphabet, size_t len, unsigned char c);
+static void pfrom_base64(char c1, char c2, char c3, char c4, unsigned char *data)
+{
+	unsigned char v1, v2, v3, v4;
+	v1 = base64_rmap[(int)c1];
+	v2 = base64_rmap[(int)c2];
+	v3 = base64_rmap[(int)c3];
+	v4 = base64_rmap[(int)c4];
+	data[0] = (v1 << 2) | (v2 >> 4);
+	data[1] = (v2 << 4) | (v3 >> 2);
+	data[2] = (v3 << 6) | v4;
+}
+void from_base64(const char *base64, size_t len, unsigned char *data)
+{
+	size_t i, hi=0;
+	for(i=0; i<(len - 3); i+=4) {
+		pfrom_base64(base64[i], base64[i+1], base64[i+2], base64[i+3],
+				data + hi);
+		hi += 3;
+	}
+	if(i < len) {
+		char c1, c2=0, c3=0;
+		c1 = base64[i];
+		if(i < (len - 1))
+			c2 = base64[i+1];
+		if(i < (len - 2))
+			c3 = base64[i+2];
+		pfrom_base64(c1, c2, c3, 0, data+hi);
+	}
+}
+void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t keylen,
+		unsigned char *out)
+{
+	size_t i;
+	for(i=0; i<datalen; ++i)
+		out[i] = data[i] ^ key[i % keylen];
+}
+
+void kasiski_calc(const unsigned char *data, size_t datalen, double *out, size_t outlen)
+{
+	size_t curidx, match;
+	size_t matchlen;
+	size_t total_match = 0;
+	double tmp;
+	for(curidx=0; curidx < outlen; ++curidx)
+		out[curidx] = 0.0;
+	for(curidx=0; curidx<datalen; ++curidx)
+	{
+		match = curidx+2;
+		while(match < datalen) {
+			while(match<datalen && data[curidx] != data[match])
+				++match;
+			matchlen = 1;
+			while((match+matchlen) < datalen && data[curidx+matchlen] == data[match+matchlen])
+				matchlen++;
+			if(matchlen > 2) {
+				size_t deltapos = match - curidx;
+				size_t i;
+				for(i=1;i<=deltapos;++i) {
+					size_t pos_keylen;
+					if(deltapos % i)
+						continue;
+					pos_keylen = deltapos / i;
+					if(pos_keylen < outlen) {
+						out[pos_keylen] += 1;
+						total_match += 1;
+					}
+				}
+			}
+			match++;
+		}
+	}
+	if(total_match == 0)
+		return;
+	tmp = 1.0 / total_match;
+	for(curidx=0; curidx < outlen; ++curidx)
+		out[curidx] *= tmp;
+}
+static size_t edit_distance_c(unsigned char c1, unsigned char c2)
+{
+	size_t i, dist=0;
+	unsigned char d = c1^c2;
+	for(i=0; i<8; ++i)
+		dist += ((d & (1 << i)) != 0);
+	return dist;
+}
+
+size_t edit_dist(unsigned char *d1, unsigned char *d2, size_t len)
+{
+	size_t i, dist=0;
+	for(i=0; i<len; ++i)
+		dist += edit_distance_c(d1[i], d2[i]);
+	return dist;
+}
+
+void hor_arrange(const unsigned char *data, size_t datalen, size_t vertsize, unsigned char *out)
+{
+	size_t i, j, lastidx=0;
+	for(i=0; i < vertsize; ++i) {
+		for(j=0; i+j*vertsize < datalen; ++j) {
+			out[lastidx++] = data[i+j*vertsize];
+		}
+	}
+}
+
+
+
+
+
+
+
+
 
 
 
