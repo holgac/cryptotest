@@ -23,6 +23,8 @@ struct command *construct_commands()
 	cur = cur->next;
 	cur->next = construct_xor_cmd();
 	cur = cur->next;
+	cur->next = construct_aes_cmd();
+	cur = cur->next;
 	// cur->next = construct_other_cmd()
 	// cur = cur->next;
 	return root;
@@ -45,6 +47,7 @@ int main(int argc, char** argv)
 	if(argc < 2) {
 		exit(0);
 	}
+	init();
 	commands = construct_commands();
 	cmd = commands;
 	for(i=1;i<argc;++i) {
@@ -67,5 +70,6 @@ int main(int argc, char** argv)
 		exit(0);
 	}
 	cmd->perform(argc-i, argv+i);
+	cleanup();
 	return 0;
 }

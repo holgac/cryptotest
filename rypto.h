@@ -1,9 +1,12 @@
 #ifndef RYPTO_H_
 #define RYPTO_H_
 
+void init();
+void cleanup();
+
+
 #define FREQMAP_SPACE 26
 #define FREQMAP_LEN 27
-
 /*
  * 0-25 for A to Z,
  * 26 for space (0.2 selected)
@@ -32,7 +35,14 @@ int cipher_substitution(unsigned char *data, size_t datalen, unsigned char *sort
 		unsigned char *alphabet, size_t alphabetlen, unsigned char *out);
 void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t keylen,
 		unsigned char *out);
-
+/*
+ * 	Now only supports 128 bit ecb.
+ * 	TODO: implmenet a generic method for later
+ */
+void cipher_aes(unsigned char *data, size_t datalen, unsigned char *key,
+		unsigned char *out);
+void decipher_aes(unsigned char *data, size_t datalen, unsigned char *key,
+		unsigned char *out);
 double bigram_fitness(unsigned char *data, size_t datalen);
 
 /*
@@ -99,5 +109,6 @@ struct command *construct_affine_cmd();
 struct command *construct_substitution_cmd();
 struct command *construct_matasano_cmd();
 struct command *construct_xor_cmd();
+struct command *construct_aes_cmd();
 
 #endif
