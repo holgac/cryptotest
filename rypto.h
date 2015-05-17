@@ -1,6 +1,8 @@
 #ifndef RYPTO_H_
 #define RYPTO_H_
 
+#include <stddef.h>
+
 void init();
 void cleanup();
 
@@ -35,15 +37,16 @@ int cipher_substitution(unsigned char *data, size_t datalen, unsigned char *sort
 		unsigned char *alphabet, size_t alphabetlen, unsigned char *out);
 void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t keylen,
 		unsigned char *out);
-/*
- * 	Now only supports 128 bit ecb.
- * 	TODO: implmenet a generic method for later
- */
-void cipher_aes(unsigned char *data, size_t datalen, unsigned char *key,
-		unsigned char *out);
-void decipher_aes(unsigned char *data, size_t datalen, unsigned char *key,
-		unsigned char *out);
+
 double bigram_fitness(unsigned char *data, size_t datalen);
+
+/*
+ * Adds padding to the data to match blocklen-multiple length data.
+ * data should have enough space to store datalen + blocklen
+ * blocklen is in range of [1, 255].
+ * padding is added even if datalen is a multiple of blocklen.
+ */
+size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
 
 /*
  * horizontally rearranges memory so that

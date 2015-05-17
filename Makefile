@@ -3,7 +3,7 @@ CC=gcc
 DEBUG=true
 INCLUDEDIR=./include
 SRCDIR=./
-CFLAGS=-c -I$(INCLUDEDIR) -Wall -pedantic-errors
+CFLAGS=-c -I$(INCLUDEDIR) -Wall
 OPT=-Wall
 SOURCES=$(shell find $(SRCDIR) -name "*.c")
 OBJECTS=$(SOURCES:%.c=%.o)

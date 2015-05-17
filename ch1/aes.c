@@ -8,6 +8,7 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include "../rypto.h"
+#include "../impl/aes.h"
 
 static void aes_encrypt(int argc, char **argv);
 static void aes_encrypt_hex(int argc, char **argv);
@@ -57,85 +58,90 @@ struct command *construct_aes_cmd()
 
 static void aes_encrypt(int argc, char **argv)
 {
-	unsigned char *cipher;
-	size_t datalen;
-	size_t i;
-	char *cipher_b64;
-	datalen = strlen(argv[0]);
-	cipher = alloca(datalen);
-	cipher_aes((unsigned char *)argv[0], datalen, (unsigned char *)argv[1], cipher);
-	printf("Cipher: ");
-	for(i=0; i<datalen; ++i)
-		printf("%02x", (unsigned int)cipher[i]);
-	cipher_b64 = alloca(4 * datalen / 3 + 1);
-	to_base64(cipher, datalen, cipher_b64);
-	cipher_b64[4*datalen / 3] = 0;
-	printf("\nBase64: %s\n", cipher_b64);
+	struct aes_opmod *opmod;
+	unsigned char *plain, *key, *cipher;
+	size_t len;
+	char *chex, *cb64;
+	plain = (unsigned char *)argv[0];
+	key = (unsigned char *)argv[1];
+	len = strlen(argv[0]);
+	cipher = alloca(len);
+	chex = alloca(len*2 + 1);
+	chex[len*2] = 0;
+	cb64 = alloca(4*len/3+1);
+	cb64[4*len/3] = 0;
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_enc(opmod, plain, len, cipher, key, NULL);
+	to_hex(cipher, len, chex);
+	to_base64(cipher, len, cb64);
+	printf("Cipher: %s\nBase64: %s\n", chex, cb64);
 }
 
 static void aes_encrypt_hex(int argc, char **argv)
 {
-	unsigned char *cipher, *data, *key;
-	size_t datalen;
-	size_t i;
-	char *cipher_b64;
-	datalen = strlen(argv[0])/2;
-	data = alloca(datalen);
-	from_hex(argv[0], datalen*2, data);
+	struct aes_opmod *opmod;
+	unsigned char *cipher, *plain, *key;
+	size_t len;
+	char *chex, *cb64;
+
+	len = strlen(argv[0])/2;
+	plain = alloca(len);
+	from_hex(argv[0], len*2, plain);
 	key = alloca(17);
 	from_hex(argv[1], 32, key);
-	cipher = alloca(datalen);
-	cipher_aes(data, datalen, key, cipher);
-	printf("Cipher: ");
-	for(i=0; i<datalen; ++i)
-		printf("%02x", (unsigned int)cipher[i]);
-	cipher_b64 = alloca(4 * datalen / 3 + 1);
-	to_base64(cipher, datalen, cipher_b64);
-	cipher_b64[4*datalen / 3] = 0;
-	printf("\nBase64: %s\n", cipher_b64);
+	cipher = alloca(len);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_enc(opmod, plain, len, cipher, key, NULL);
+	chex = alloca(len*2+1);
+	cb64 = alloca(4 * len / 3 + 1);
+	to_hex(cipher, len, chex);
+	to_base64(cipher, len, cb64);
+	printf("Cipher: %s\nBase64: %s\n", chex, cb64);
 }
 
 static void aes_decrypt(int argc, char **argv)
 {
+	struct aes_opmod *opmod;
 	unsigned char *plain, *cipher, *key;
 	size_t cipherlen;
-	size_t i;
+	char *plainhex;
 	cipherlen = strlen(argv[0])/2;
 	cipher = alloca(cipherlen);
 	from_hex(argv[0], cipherlen*2, cipher);
 	key = alloca(17);
 	from_hex(argv[1], 32, key);
 	plain = alloca(cipherlen+1);
-	decipher_aes(cipher, cipherlen, key, plain);
-	printf("Plain hex: ");
-	for(i=0; i<cipherlen; ++i)
-		printf("%02x", (unsigned int)plain[i]);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_dec(opmod, cipher, cipherlen, plain, key, NULL);
+	plainhex = alloca(cipherlen*2+1);
+	to_hex(plain, cipherlen, plainhex);
 	plain[cipherlen] = 0;
-	printf("\nPlaintext: ^%s$\n", (char *)plain);
+	printf("Plain hex: %s\nPlain text: %s\n", plainhex, (char *)plain);
 }
 
 static void aes_decryptf(int argc, char **argv)
 {
+	struct aes_opmod *opmod;
 	int fd;
 	struct stat filestat;
-	char *base64;
+	char *cb64;
 	unsigned char *plain;
-	size_t datalen, keylen;
-	unsigned char *data;
-	unsigned char *key;
+	size_t len;
+	unsigned char *cipher, *key;
 	
 	fd = open(argv[0], O_RDONLY);
 	fstat(fd, &filestat);
-	base64 = alloca(filestat.st_size);
-	datalen = read(fd, base64, filestat.st_size);
-	data = alloca(3 * datalen / 4);
-	from_base64(base64, datalen, data);
-	datalen = 3 * datalen / 4;
-	plain = alloca(datalen+1);
-	plain[datalen] = 0;
-	keylen = strlen(argv[1]);
+	cb64 = alloca(filestat.st_size);
+	len = read(fd, cb64, filestat.st_size);
+	cipher = alloca(3 * len / 4);
+	from_base64(cb64, len, cipher);
+	len = 3 * len / 4;
+	plain = alloca(len+1);
+	plain[len] = 0;
 	key = (unsigned char *)argv[1];
-	decipher_aes(data, datalen, key, plain);
+
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_dec(opmod, cipher, len, plain, key, NULL);
 	printf("Plain: %s\n", plain);
 }
 
