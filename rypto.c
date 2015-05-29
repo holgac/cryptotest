@@ -381,6 +381,13 @@ size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen)
 	return datalen + pad_size;
 }
 
+void xor_arr(unsigned char *dst, unsigned char *src, size_t len)
+{
+	size_t i;
+	for(i=0; i<len; ++i)
+		dst[i] ^= src[i];
+}
+
 
 
 

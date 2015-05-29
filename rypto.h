@@ -38,6 +38,7 @@ int cipher_substitution(unsigned char *data, size_t datalen, unsigned char *sort
 void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t keylen,
 		unsigned char *out);
 
+void xor_arr(unsigned char *dst, unsigned char *src, size_t len);
 double bigram_fitness(unsigned char *data, size_t datalen);
 
 /*

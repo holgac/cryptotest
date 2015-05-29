@@ -51,11 +51,9 @@ static inline unsigned char gf_mult2(unsigned char d)
 	return (d << 1) ^ (0x11b & -(d>>7));
 }
 
-static void add_rk(unsigned char *data, unsigned char *rk)
+static inline void add_rk(unsigned char *data, unsigned char *rk)
 {
-	size_t i;
-	for(i=0; i<16; ++i)
-		data[i] ^= rk[i];
+	xor_arr(data, rk, 16);
 }
 
 static void calc_new_rk(unsigned char *rk, unsigned char *rc, unsigned char *out)
@@ -156,6 +154,59 @@ static void aes_128_ecb_decrypt(struct aes_opmod *opmod, unsigned char *data)
 	add_rk(data, rk);
 }
 
+void aes_128_cbc_init(struct aes_opmod *opmod, const unsigned char *key,
+		const unsigned char *iv)
+{
+	memcpy(opmod->context, key, 16);
+	memcpy(opmod->context+16, iv, 16);
+}
+
+static void aes_128_cbc_encrypt(struct aes_opmod *opmod, unsigned char *data)
+{
+	const size_t nr = 9;
+	unsigned char rk[16*(nr+2)], rc=1;
+	size_t r=0, i;
+	memcpy(rk, opmod->context, 16);
+	for(i=0; i<(nr+1); ++i)
+		calc_new_rk(rk + i*16, &rc, rk + (i+1)*16);
+	xor_arr(data, opmod->context+16, 16);
+	add_rk(data, rk);
+	for(r=0; r<nr; ++r) {
+		sub_byte(data);
+		shift_row(data);
+		mix_column(data);
+		add_rk(data, rk+(r+1)*16);
+	}
+	sub_byte(data);
+	shift_row(data);
+	add_rk(data, rk+(nr+1)*16);
+	memcpy(opmod->context+16, data, 16);
+}
+
+static void aes_128_cbc_decrypt(struct aes_opmod *opmod, unsigned char *data)
+{
+	const size_t nr = 9;
+	unsigned char rk[16*(nr+2)], rc=1, old_iv[16];
+	size_t r=0, i;
+	memcpy(rk, opmod->context, 16);
+	memcpy(old_iv, opmod->context+16, 16);
+	memcpy(opmod->context+16, data, 16);
+	for(i=0; i<(nr+1); ++i)
+		calc_new_rk(rk + i*16, &rc, rk + (i+1)*16);
+	add_rk(data, rk+(nr+1)*16);
+	for(r=0; r<nr; ++r) {
+		invshift_row(data);
+		invsub_byte(data);
+		add_rk(data, rk+(nr-r)*16);
+		invmix_column(data);
+	}
+	invshift_row(data);
+	invsub_byte(data);
+	add_rk(data, rk);
+	xor_arr(data, old_iv, 16);
+}
+
+
 /**
  * create_aes_opmod() - creates aes operation mod
  * @bit: bit size, AES_BIT_*
@@ -174,6 +225,14 @@ struct aes_opmod *aes_create_opmod(int bit, int mod)
 			opmod->init = aes_128_ecb_init;
 			opmod->enc = aes_128_ecb_encrypt;
 			opmod->dec = aes_128_ecb_decrypt;
+			break;
+		case AES_OPMOD_CBC:
+			opmod = malloc(sizeof(*opmod) + 32);
+			opmod->bs = 16;
+			opmod->padop = NULL;
+			opmod->init = aes_128_cbc_init;
+			opmod->enc = aes_128_cbc_encrypt;
+			opmod->dec = aes_128_cbc_decrypt;
 			break;
 		}
 	}
