@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <math.h>
@@ -29,6 +30,7 @@ unsigned char base64_rmap[128] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 
 void init()
 {
+	srand(time(NULL));
 }
 void cleanup()
 {
@@ -388,6 +390,29 @@ void xor_arr(unsigned char *dst, unsigned char *src, size_t len)
 		dst[i] ^= src[i];
 }
 
+void fill_random(unsigned char *data, size_t len)
+{
+	size_t i;
+	for(i=0; i<len; ++i)
+		data[i] = rand()%256;
+}
+
+ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen)
+{
+	size_t guessed_len, i;
+	unsigned char padlen;
+	if((datalen % blocklen) != 0)
+		return -1;
+	padlen = data[datalen-1];
+	if(padlen > blocklen || padlen == 0)
+		return -1;
+	guessed_len = datalen - padlen;
+	for(i=guessed_len; i<datalen; ++i) {
+		if(data[i] != padlen)
+			return -1;
+	}
+	return guessed_len;
+}
 
 
 

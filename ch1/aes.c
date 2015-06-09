@@ -18,6 +18,8 @@ static void aes_decryptfcbc(int argc, char **argv);
 static void aes_analyze(int argc, char **argv);
 static void aes_oracle(int argc, char **argv);
 static void aes_analyzes(int argc, char **argv);
+static void aes_analyzes(int argc, char **argv);
+static void aes_cutpaste(int argc, char **argv);
 
 struct command *construct_aes_cmd()
 {
@@ -60,6 +62,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "oracle");
 	cmd->argcnt = 0;
 	cmd->perform = aes_oracle;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "cutpaste");
+	cmd->argcnt = 0;
+	cmd->perform = aes_cutpaste;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -257,16 +265,13 @@ static void aes_oracle(int argc, char **argv)
 	int mode = AES_OPMOD_ECB, guess;
 	struct aes_opmod *opmod;
 	unsigned char iv[16], key[16];
-	size_t i, prelen, suflen, len, repseq;
+	size_t prelen, suflen, len, repseq;
 	unsigned char *plain, *cipher;
-	srand(time(NULL));
 	if(rand()%2) {
 		mode = AES_OPMOD_CBC;
 	}
-	for(i=0; i<16; ++i) {
-		iv[i] = rand()%256;
-		key[i] = rand()%256;
-	}
+	fill_random(iv, 16);
+	fill_random(key, 16);
 	prelen = 5 + rand()%6;
 	suflen = 5 + rand()%6;
 	/* At least 4 identical blocks */
@@ -276,10 +281,8 @@ static void aes_oracle(int argc, char **argv)
 	cipher = alloca(len+16);
 	opmod = aes_create_opmod(AES_BIT_128, mode);
 	opmod->padop = pad_pkcs7;
-	for(i=0; i<prelen; ++i)
-		plain[i] = rand()%256;
-	for(i=0; i<suflen; ++i)
-		plain[len-i-1] = rand()%256;
+	fill_random(plain, prelen);
+	fill_random(plain+len-suflen+1, suflen);
 	aes_enc(opmod, plain, len, cipher, key, iv);
 	repseq = aes_repeated_seqs(cipher, len);
 	if(repseq>= 4)
@@ -288,6 +291,8 @@ static void aes_oracle(int argc, char **argv)
 		guess = AES_OPMOD_CBC;
 	if(guess != mode)
 		printf("Guessed %d, was actually %d\n", guess, mode);
+	else
+		printf("Correct guess!\n");
 }
 
 static void unknown_cipher(const unsigned char *plain, size_t len, 
@@ -351,8 +356,7 @@ static void aes_analyzes(int argc, char **argv)
 	unsigned char key[16], *cur_cipher;
 	size_t block_size, i, j, ulen;
 	unsigned char *decrypted_salt, *cipher;
-	for(i=0; i<16; ++i)
-		key[i] = rand()%256;
+	fill_random(key, 16);
 	/* Find block size */
 	block_size = aes_block_size(key, &ulen);
 	printf("Block size: %lu, ulen %lu\n", block_size, ulen);
@@ -391,6 +395,84 @@ static void aes_analyzes(int argc, char **argv)
 	free(decrypted_salt);
 	free(cipher);
 }
+
+
+static void profile_for(const char *email, unsigned char *res, size_t *len)
+{
+	const char *prefix = "email=";
+	const char *suffix = "&uid=10&role=user";
+	char *tok;
+	size_t reslen = strlen(prefix), toklen;
+	char em[256];
+	strcpy(em, email);
+	memcpy(res, prefix, reslen);
+	for(tok=strtok(em, "&="); tok; tok=strtok(NULL, "&=")) {
+		toklen = strlen(tok);
+		memcpy(res+reslen, tok, toklen);
+		reslen += toklen;
+	}
+	toklen = strlen(suffix);
+	memcpy(res+reslen, suffix, toklen);
+	reslen += toklen;
+	res[reslen] = 0;
+	if(len)
+		*len = reslen;
+}
+
+static void encode_profile(const char *email, const unsigned char *key, unsigned char *res, size_t *outlen)
+{
+	struct aes_opmod *opmod;
+	unsigned char tmp[1024];
+	size_t len;
+	profile_for(email, tmp, &len);
+	len = pad_pkcs7(tmp, len, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_enc(opmod, tmp, len, res, key, NULL);
+	if(outlen)
+		*outlen = len;
+}
+static void decode_profile(const unsigned char *cipher, size_t cipherlen, const unsigned char *key, char *res, size_t *outlen)
+{
+	struct aes_opmod *opmod;
+	ssize_t len;
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_dec(opmod, cipher, cipherlen, (unsigned char *)res, key, NULL);
+	len = unpad_pkcs7((unsigned char *)res, cipherlen, 16);
+	if(len == -1) {
+		printf("Corrupt cipher!\n");
+		exit(-1);
+	}
+	if(outlen)
+		*outlen = len;
+}
+static void aes_cutpaste(int argc, char **argv)
+{
+	unsigned char res[1024];
+	unsigned char key[16];
+	size_t len, i, cipherlen, suflen;
+	size_t emaillen = 10;
+	unsigned char suffix[26];
+	char decoded[1024];
+	memcpy(suffix, "fo@bar.comadmin", 15);
+	for(i=15; i<26; ++i)
+		suffix[i] = 11;
+	fill_random(key, 16);
+	profile_for("ah&=&met@mehmet.com", res, &len);
+	profile_for("a&hme&&&&t@mehmet.com", res+512, NULL);
+	if(memcmp(res, res+512, len) != 0) {
+		printf("Error in character escaping!\n");
+		exit(-1);
+	}
+	encode_profile("AAAAAAAAAAAAA", key, res, &cipherlen);
+	encode_profile((char *)suffix, key, res+512, &suflen);
+	memmove(res+cipherlen-16, res+512+16, 16);
+	decode_profile(res, cipherlen, key, decoded, &len);
+	decoded[len] = 0;
+	printf("Decoded: %s\n", decoded);
+}
+
+
+
 
 
 

@@ -49,6 +49,17 @@ double bigram_fitness(unsigned char *data, size_t datalen);
  */
 size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
 
+/**
+ * unpad_pkcs7 - removes pkcs7 padding, returning actual length
+ * @data: data to remove padding
+ * @datalen: data length, including padding
+ * @blocklen: block length
+ *
+ * returns -1 if padding is invalid according to blocklen
+ * also, does not actually remove padding.
+ */
+ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
+
 /*
  * horizontally rearranges memory so that
  * out[0] = data[0]
@@ -97,6 +108,8 @@ void from_base64(const char *base64, size_t len, unsigned char *data);
 void extended_euclid(long a, long b, long *out);
 
 size_t edit_dist(unsigned char *d1, unsigned char *d2, size_t len);
+
+void fill_random(unsigned char *data, size_t len);
 
 #define CMDLEN 16
 
