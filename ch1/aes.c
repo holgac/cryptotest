@@ -18,7 +18,6 @@ static void aes_decryptfcbc(int argc, char **argv);
 static void aes_analyze(int argc, char **argv);
 static void aes_oracle(int argc, char **argv);
 static void aes_analyzes(int argc, char **argv);
-static void aes_analyzes(int argc, char **argv);
 static void aes_cutpaste(int argc, char **argv);
 
 struct command *construct_aes_cmd()
@@ -335,6 +334,7 @@ static size_t aes_block_size(const unsigned char *key, size_t *ulen)
 	}
 	return 0;
 }
+
 static int aes_guess_mod(const unsigned char *key, size_t bs, size_t ulen)
 {
 	size_t plainlen, cipherlen;
@@ -348,54 +348,57 @@ static int aes_guess_mod(const unsigned char *key, size_t bs, size_t ulen)
 	if(memcmp(cipher, cipher+bs, bs) == 0)
 		return AES_OPMOD_ECB;
 	return AES_OPMOD_CBC;
-
 }
 
 static void aes_analyzes(int argc, char **argv)
 {
-	unsigned char key[16], *cur_cipher;
 	size_t block_size, i, j, ulen;
-	unsigned char *decrypted_salt, *cipher;
+	unsigned char key[16], *target_cipher, *decrypted_salt, *cipher;
+	unsigned char *def_ciphers[16];
 	fill_random(key, 16);
 	/* Find block size */
 	block_size = aes_block_size(key, &ulen);
 	printf("Block size: %lu, ulen %lu\n", block_size, ulen);
 	decrypted_salt = malloc(ulen + 4*block_size + 1);
 	memset(decrypted_salt, 'A', block_size);
+	for(i=0; i<16; ++i) {
+		def_ciphers[i] = malloc(ulen + block_size);
+		unknown_cipher(decrypted_salt, (block_size-i) % block_size, key, def_ciphers[i], NULL);
+	}
 	cipher = malloc(ulen + 4*block_size);
-	cur_cipher = alloca(block_size);
 	if(aes_guess_mod(key, block_size, ulen) == AES_OPMOD_ECB)
 		printf("Detected ECB\n");
 	for(i=0; i<block_size; ++i) {
-		unknown_cipher(decrypted_salt+i+1, block_size-i-1, key, cipher, NULL);
-		memcpy(cur_cipher, cipher, block_size);
+		target_cipher = def_ciphers[(i+1)%block_size];
 		for(j=0; j<256; ++j) {
 			decrypted_salt[block_size + i] = j;
 			unknown_cipher(decrypted_salt+i+1, block_size, key, cipher, NULL);
-			if(memcmp(cur_cipher, cipher, block_size) == 0) {
+			if(memcmp(target_cipher, cipher, block_size) == 0) {
 				break;
 			}
 		}
 	}
 	for(i=block_size; i<ulen; ++i) {
-		unknown_cipher(decrypted_salt, block_size - (i%block_size) - 1, key, cipher, NULL);
-		memcpy(cur_cipher, cipher + block_size * (i/block_size), block_size);
+		target_cipher = def_ciphers[(i+1)%block_size] + block_size * (i/block_size);
 		for(j=0; j<256; ++j) {
 			decrypted_salt[block_size + i] = j;
 			unknown_cipher(decrypted_salt+i+1, block_size, key, cipher, NULL);
-			if(memcmp(cipher, cur_cipher, block_size) == 0) {
+			if(memcmp(cipher, target_cipher, block_size) == 0) {
 				break;
 			}
 		}
-		if(j == 256)
+		if(j == 256) {
 			printf("NO MATCH AT %lu\n", i);
+			exit(-1);
+		}
 	}
 	decrypted_salt[block_size + i] = 0;
 	printf("Salt:\n%s\n", (char *)(decrypted_salt+block_size));
 	free(decrypted_salt);
 	free(cipher);
+	for(i=0; i<16; ++i)
+		free(def_ciphers[i]);
 }
-
 
 static void profile_for(const char *email, unsigned char *res, size_t *len)
 {
@@ -450,7 +453,6 @@ static void aes_cutpaste(int argc, char **argv)
 	unsigned char res[1024];
 	unsigned char key[16];
 	size_t len, i, cipherlen, suflen;
-	size_t emaillen = 10;
 	unsigned char suffix[26];
 	char decoded[1024];
 	memcpy(suffix, "fo@bar.comadmin", 15);
