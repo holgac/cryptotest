@@ -374,7 +374,14 @@ void hor_arrange(const unsigned char *data, size_t datalen, size_t vertsize, uns
 	}
 }
 
-void xor_arr(unsigned char *dst, unsigned char *src, size_t len)
+
+/**
+ * xor_arr - xors given memory segments
+ * @dst: xor destination (to be xorred with @src)
+ * @src: xor source (unmodified)
+ * @len: length of memory segments
+ */
+void xor_arr(unsigned char *dst, const unsigned char *src, size_t len)
 {
 	size_t i;
 	for(i=0; i<len; ++i)
