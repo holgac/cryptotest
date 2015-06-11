@@ -20,6 +20,7 @@ static void aes_oracle(int argc, char **argv);
 static void aes_analyzes(int argc, char **argv);
 static void aes_analyzeh(int argc, char **argv);
 static void aes_cutpaste(int argc, char **argv);
+static void aes_bitflip(int argc, char **argv);
 
 struct command *construct_aes_cmd()
 {
@@ -62,6 +63,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "oracle");
 	cmd->argcnt = 0;
 	cmd->perform = aes_oracle;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "bitflip");
+	cmd->argcnt = 0;
+	cmd->perform = aes_bitflip;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -715,7 +722,6 @@ static void aes_analyzeh(int argc, char **argv)
 			key, block_size, decrypted_salt, saltlen);
 	decrypted_salt[saltlen] = 0;
 	printf("Salt:\n%s\n", (char *)decrypted_salt);
-
 	/* free all resources */
 	for(i=0; i<16; ++i)
 		free(cipher_salt[i]);
@@ -724,6 +730,85 @@ static void aes_analyzeh(int argc, char **argv)
 	free(test_plain);
 }
 
+static void format_userdata(const char *userdata, unsigned char *res, size_t *len)
+{
+	const char *prefix = "comment1=cooking%20MCs;userdata=";
+	const char *suffix = ";comment2=\%20like\%20a\%20pound\%20of\%20bacon";
+	char *tok;
+	size_t reslen = strlen(prefix), toklen;
+	char em[256];
+	strcpy(em, userdata);
+	memcpy(res, prefix, reslen);
+	for(tok=strtok(em, ";="); tok; tok=strtok(NULL, ";=")) {
+		toklen = strlen(tok);
+		memcpy(res+reslen, tok, toklen);
+		reslen += toklen;
+	}
+	toklen = strlen(suffix);
+	memcpy(res+reslen, suffix, toklen);
+	reslen += toklen;
+	res[reslen] = 0;
+	if(len)
+		*len = reslen;
+}
+
+static void encode_userdata(const char *userdata, unsigned char *res, size_t *len,
+		unsigned char *key, unsigned char *iv)
+{
+	size_t udlen;
+	struct aes_opmod *opmod;
+	unsigned char ud[256];
+	format_userdata(userdata, ud, &udlen);
+	udlen = pad_pkcs7(ud, udlen, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CBC);
+	aes_enc(opmod, ud, udlen, res, key, iv);
+	if(len)
+		*len = udlen;
+}
+
+static void decode_userdata(const unsigned char *cipher, size_t cipherlen,
+		char *res, size_t *len,
+		unsigned char *key, unsigned char *iv)
+{
+	struct aes_opmod *opmod;
+	size_t plen;
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CBC);
+	aes_dec(opmod, cipher, cipherlen, (unsigned char *)res, key, iv);
+	plen = unpad_pkcs7((unsigned char *)res, cipherlen, 16);
+	res[plen] = 0;
+	if(len)
+		*len = plen;
+}
+
+static void aes_bitflip(int argc, char **argv)
+{
+	unsigned char key[16], iv[16], cipher[1024];
+	char plain[256];
+	size_t len, ilen;
+	char *inject_str = ";admin=true";
+	char *s;
+	ilen = strlen(inject_str);
+	memset(plain, 'A', 32);
+	plain[32] = 0;
+	fill_random(key, 16);
+	fill_random(iv, 16);
+	encode_userdata(plain, cipher, &len, key, iv);
+	xor_arr((unsigned char *)plain, (const unsigned char *)inject_str, ilen);
+	xor_arr(cipher+48-ilen, (unsigned char *)plain, ilen);
+	// xor_arr(cipher+48-ilen, (const unsigned char *)inject_str, ilen);
+	decode_userdata(cipher, len, plain, &len, key, iv);
+	printf("plain: %s\n", plain);
+	s = strstr(plain, inject_str);
+	if(s == NULL) {
+		printf("bitflip failed!\n");
+		exit(-1);
+	}
+	if(s[ilen] != ';') {
+		printf("corrupt result!\n");
+		exit(-1);
+	}
+	printf("Success!\n");
+}
 
 
 
