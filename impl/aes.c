@@ -11,14 +11,12 @@ static void invshift_row(unsigned char *data)
 	data[5] = data[1];
 	data[1] = data[13];
 	data[13] = tmp;
-
 	tmp = data[2];
 	data[2] = data[10];
 	data[10] = tmp;
 	tmp = data[6];
 	data[6] = data[14];
 	data[14] = tmp;
-
 	tmp = data[3];
 	data[3] = data[7];
 	data[7] = data[11];
@@ -74,6 +72,7 @@ static void sub_byte(unsigned char *data)
 	for(i=0; i<16; ++i)
 		data[i] = s_box[data[i]];
 }
+
 static void shift_row(unsigned char *data)
 {
 	unsigned char tmp;
@@ -88,13 +87,13 @@ static void shift_row(unsigned char *data)
 	tmp = data[6];
 	data[6] = data[14];
 	data[14] = tmp;
-
 	tmp = data[11];
 	data[11] = data[7];
 	data[7] = data[3];
 	data[3] = data[15];
 	data[15] = tmp;
 }
+
 static void mix_column(unsigned char *data)
 {
 	unsigned char old[16];

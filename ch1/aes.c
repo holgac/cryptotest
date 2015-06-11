@@ -18,6 +18,7 @@ static void aes_decryptfcbc(int argc, char **argv);
 static void aes_analyze(int argc, char **argv);
 static void aes_oracle(int argc, char **argv);
 static void aes_analyzes(int argc, char **argv);
+static void aes_analyzeh(int argc, char **argv);
 static void aes_cutpaste(int argc, char **argv);
 
 struct command *construct_aes_cmd()
@@ -67,6 +68,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "cutpaste");
 	cmd->argcnt = 0;
 	cmd->perform = aes_cutpaste;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "analyzeh");
+	cmd->argcnt = 0;
+	cmd->perform = aes_analyzeh;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -294,6 +301,31 @@ static void aes_oracle(int argc, char **argv)
 		printf("Correct guess!\n");
 }
 
+static void unknown_cipherh(const unsigned char *plain, size_t len, 
+		const unsigned char *key, unsigned char *cipher, size_t *clen_out)
+{
+	char *ub64="Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg"
+		"aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq"
+		"dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg"
+		"YnkK";
+	struct aes_opmod *opmod;
+	size_t lenu, lenub, clen, randlen;
+	unsigned char *salted_plain;
+	randlen = 32 + rand()%32;
+	lenu = strlen(ub64);
+	lenub = 3 * lenu / 4;
+	clen = lenub + len + randlen;
+	salted_plain = alloca(clen + 16);
+	fill_random(salted_plain, randlen);
+	memcpy(salted_plain + randlen, plain, len);
+	from_base64(ub64, lenu, salted_plain+len+randlen);
+	clen = pad_pkcs7(salted_plain, clen, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	aes_enc(opmod, salted_plain, clen, cipher, key, NULL);
+	if(clen_out != NULL)
+		*clen_out = clen;
+}
+
 static void unknown_cipher(const unsigned char *plain, size_t len, 
 		const unsigned char *key, unsigned char *cipher, size_t *clen_out)
 {
@@ -311,7 +343,6 @@ static void unknown_cipher(const unsigned char *plain, size_t len,
 	memcpy(salted_plain, plain, len);
 	from_base64(ub64, lenu, salted_plain+len);
 	clen = pad_pkcs7(salted_plain, clen, 16);
-	
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, salted_plain, clen, cipher, key, NULL);
 	if(clen_out != NULL)
@@ -434,6 +465,7 @@ static void encode_profile(const char *email, const unsigned char *key, unsigned
 	if(outlen)
 		*outlen = len;
 }
+
 static void decode_profile(const unsigned char *cipher, size_t cipherlen, const unsigned char *key, char *res, size_t *outlen)
 {
 	struct aes_opmod *opmod;
@@ -448,6 +480,7 @@ static void decode_profile(const unsigned char *cipher, size_t cipherlen, const 
 	if(outlen)
 		*outlen = len;
 }
+
 static void aes_cutpaste(int argc, char **argv)
 {
 	unsigned char res[1024];
@@ -473,8 +506,223 @@ static void aes_cutpaste(int argc, char **argv)
 	printf("Decoded: %s\n", decoded);
 }
 
+static size_t aes_occ3(unsigned char *cipher, size_t cipherlen, size_t block_size)
+{
+	size_t i, num_blocks;
+	num_blocks = cipherlen / block_size - 2;
+	for(i=0; i<num_blocks; ++i) {
+		if(memcmp(cipher + i*block_size, cipher + (i+1)*block_size, block_size) == 0) {
+			if(memcmp(cipher + i*block_size, cipher + (i+2)*block_size, block_size) == 0)
+				return i;
+		}
+	}
+	return cipherlen; 
+}
 
+static void aes_fillb(unsigned char *cipher, size_t cipherlen, unsigned char *cipher_a, 
+		size_t occ_a, size_t block_size, unsigned char *cipher_b)
+{
+	unsigned char *cip_a_pos;
+	size_t occ_na, i, occ_diff;
+	cip_a_pos = memmem(cipher + block_size*(occ_a+3), cipherlen - block_size*(occ_a+3),
+			cipher_a, block_size);
+	if(cip_a_pos == NULL) {
+		printf("Cannot find cipher_a\n");
+		exit(-1);
+	}
+	occ_na = (cip_a_pos - cipher)/block_size;
+	occ_diff = occ_na - occ_a + 2;
+	for(i=occ_na+1; i < occ_a + 20; ++i) {
+		memcpy(cipher_b + (i-occ_na-1)*block_size, cipher + i*block_size, block_size);
+	}
+	for(i=occ_a+3; i<occ_na; ++i) {
+		memcpy(cipher_b + (i-occ_na+16)*block_size, cipher + i*block_size, block_size);
+	}
+}
 
+static void aes_fillcs(unsigned char *cipher, unsigned char *cipher_salt[16],
+		unsigned char *key, unsigned char *test_plain, size_t block_size,
+		unsigned char *cipher_a, unsigned char *cipher_b)
+{
+	size_t found_cs = 0, outlen, occ_a, found_idx, target_idx;
+	while(found_cs < 16) {
+		unknown_cipherh(test_plain, 1 + block_size*5, key, cipher, &outlen);
+		occ_a = ((unsigned char *)memmem(cipher, outlen, cipher_a, block_size) - cipher) / block_size;
+		if(memcmp(cipher+(occ_a+3)*block_size, cipher_a, block_size) == 0)
+			found_idx = 0;
+		else {
+			for(found_idx=1; found_idx<16; ++found_idx) {
+				if(memcmp(cipher+(occ_a+3)*block_size, cipher_b+found_idx*block_size, block_size) == 0) {
+					break;
+				}
+			}
+		}
+		target_idx = (found_idx+1) % 16;
+		if(cipher_salt[target_idx] == NULL) {
+			cipher_salt[target_idx] = malloc(outlen - (occ_a+4) * block_size);
+			if(found_idx == 0 || target_idx == 0) {
+				memcpy(cipher_salt[target_idx], cipher + (occ_a+5)*block_size, outlen - (occ_a+5)*block_size);
+			} else {
+				memcpy(cipher_salt[target_idx], cipher + (occ_a+4)*block_size, outlen - (occ_a+4)*block_size);
+			}
+			found_cs++;
+		}
+	}
+}
+
+static void aes_decrypt_salt_16(unsigned char *cipher, unsigned char *cipher_salt[16],
+		unsigned char *test_plain, unsigned char *cipher_a, unsigned char *cipher_b,
+		unsigned char *key, size_t block_size, unsigned char *decrypted_salt)
+{
+	size_t occ_a, salt_i, i, j, outlen, found_idx;
+	ssize_t g;
+	unsigned char *found_block;
+	/* printf("Finding salt[0]\n"); */
+	memset(test_plain + 5*block_size+1, 'A', 16*(block_size+1));
+	for(g=0; g!=256; ++g) {
+		for(i=0; i<16; ++i) {
+			test_plain[5*block_size+1 + i*(block_size+1)] = g;
+		}
+		unknown_cipherh(test_plain, 5*block_size + 1 + (block_size+1)*16,
+				key, cipher, &outlen);
+		occ_a = ((unsigned char *)memmem(cipher, outlen, cipher_a, block_size)
+				- cipher) / block_size;
+		if(memcmp(cipher + (occ_a+3)*block_size, cipher_a, block_size) == 0)
+			found_idx = 0;
+		else
+			for(found_idx=1; found_idx<16; ++found_idx)
+				if(memcmp(cipher + (occ_a+3)*block_size,
+							cipher_b+found_idx*block_size, block_size) == 0)
+					break;
+		if(found_idx == 0)
+			found_block = cipher + (occ_a + 19)*block_size;
+		else if(found_idx == 15)
+			found_block = cipher + (occ_a + 20)*block_size;
+		else
+			found_block = cipher + (occ_a + 18 - found_idx) * block_size;
+		if(memcmp(found_block, cipher_salt[15], block_size) == 0) {
+			/* printf("\tFound salt[0] = %ld (%c)\n", g, (char)g); */
+			decrypted_salt[0] = g;
+			break;
+		}
+	}
+	/* actually 64A || B || 16A part is no longer necessary */
+	for(salt_i=1; salt_i < 16; ++salt_i) {
+		/* printf("Finding salt[%lu]\n", salt_i); */
+		memset(test_plain + 5*block_size+1, 'A', 16*(block_size+1));
+		for(i=0; i<16; ++i)
+			for(j=0; j<salt_i; ++j)
+				test_plain[5*block_size+1 + i*(block_size+1) + j] = decrypted_salt[j];
+		for(g=0; g!=256; ++g) {
+			for(i=0; i<16; ++i)
+				test_plain[5*block_size+1 + i*(block_size+1) + salt_i] = g;
+			unknown_cipherh(test_plain, 5*block_size + 1 + (block_size+1)*16,
+					key, cipher, &outlen);
+			found_block = memmem(cipher, outlen, cipher_salt[16-salt_i], block_size);
+			if(found_block == NULL) {
+				g--;
+				continue;
+			}
+			found_block -= block_size;
+			if(memcmp(found_block, cipher_salt[15-salt_i], block_size) == 0) {
+				/* printf("\tFound salt[%lu] = %ld (%c)\n", salt_i, g, (char)g); */
+				decrypted_salt[salt_i] = g;
+				break;
+			}
+		}
+		if(g == 256)
+			salt_i--;
+	}
+}
+
+static void aes_decrypt_salt(unsigned char *cipher, unsigned char *cipher_salt[16],
+		unsigned char *test_plain, unsigned char *cipher_a, unsigned char *cipher_b,
+		unsigned char *key, size_t block_size, unsigned char *decrypted_salt,
+		size_t salt_len)
+{
+	size_t salt_i, i, outlen;
+	ssize_t g;
+	unsigned char *match, *anchor, *target;
+	/* find first 16 bytes of salt */
+	aes_decrypt_salt_16(cipher, cipher_salt, test_plain, cipher_a, cipher_b,
+			key, block_size, decrypted_salt);
+	memset(test_plain, 'A', block_size);
+	for(salt_i = 16; salt_i<salt_len; ++salt_i) {
+		i = (1024 - salt_i)%16;
+		anchor = cipher_salt[i] + block_size*((salt_i-1)/block_size);
+		i = (1024 - salt_i - 1) % 16;
+		match = cipher_salt[i] + block_size*(salt_i/block_size);
+		for(i=0; i<17; ++i)
+			memcpy(test_plain + block_size + i*(block_size+1), decrypted_salt+salt_i-block_size, block_size);
+		for(g=0; g!=256; ++g) {
+			for(i=0; i<17; ++i)
+				test_plain[i*(block_size+1) + 2*block_size] = g;
+			unknown_cipherh(test_plain, block_size + 17*(block_size+1),
+					key, cipher, &outlen);
+			target = memmem(cipher, outlen, anchor, block_size);
+			if(target == NULL) {
+				printf("target null %ld when finding %lu\n", g, salt_i);
+				exit(-1);
+			}
+			target -= block_size;
+			if(memcmp(target, cipher_a, block_size) == 0) {
+				target = memmem(target+2*block_size, outlen, anchor, block_size);
+				if(target == NULL) {
+					printf("target still null %ld when finding %lu\n", g, salt_i);
+					exit(-1);
+				}
+				target -= block_size;
+			}
+			if(memcmp(target, match, block_size) == 0) {
+				/* printf("\tFound salt[%lu] = %ld (%c)\n", salt_i, g, (char)g); */
+				decrypted_salt[salt_i] = g;
+				break;
+			}
+		}
+		if(g == 256) {
+			printf("Could not detect %lu!\n", salt_i);
+			exit(-1);
+		}
+	}
+}
+
+static void aes_analyzeh(int argc, char **argv)
+{
+	size_t block_size = 16, i, saltlen=138, outlen;
+	/* cipher_b[i*16] = E(K, 'A'*i || 'B' || 'A' * (16-i)) */
+	/* cipher_a = E(K, 'A'*16) */
+	unsigned char key[16], cipher_a[16], cipher_b[16*16];
+	/* cipher_salt[i] = E(K, 'A'*i || salt) */
+	unsigned char *decrypted_salt, *cipher, *cipher_salt[16];
+	unsigned char *test_plain;
+	decrypted_salt = malloc(4096);
+	cipher = malloc(4096);
+	test_plain = malloc(4096);
+	fill_random(key, 16);
+	memset(test_plain, 'A', 21*block_size);
+	memset(cipher_salt, 0, 16 * sizeof(void *));
+	for(i=0; i<16; ++i)
+		test_plain[(block_size*4) + (block_size+1)*i] = 'B';
+	unknown_cipherh(test_plain, (block_size*4) + (16 * (block_size+1)),
+			key, cipher, &outlen);
+	i = aes_occ3(cipher, outlen, block_size);
+	memcpy(cipher_a, cipher+i*block_size, block_size);
+	aes_fillb(cipher, outlen, cipher_a, i, block_size, cipher_b);
+	aes_fillcs(cipher, cipher_salt, key, test_plain, block_size,
+			cipher_a, cipher_b);
+	/* find salt */
+	aes_decrypt_salt(cipher, cipher_salt, test_plain, cipher_a, cipher_b,
+			key, block_size, decrypted_salt, saltlen);
+	decrypted_salt[saltlen] = 0;
+	printf("Salt:\n%s\n", (char *)decrypted_salt);
+
+	/* free all resources */
+	for(i=0; i<16; ++i)
+		free(cipher_salt[i]);
+	free(decrypted_salt);
+	free(cipher);
+	free(test_plain);
+}
 
 
 

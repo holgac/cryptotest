@@ -3,7 +3,7 @@ CC=gcc
 DEBUG=true
 INCLUDEDIR=./include
 SRCDIR=./
-CFLAGS=-c -I$(INCLUDEDIR) -Wall
+CFLAGS=-c -I$(INCLUDEDIR) -Wall -std=gnu90
 OPT=-Wall
 SOURCES=$(shell find $(SRCDIR) -name "*.c")
 OBJECTS=$(SOURCES:%.c=%.o)
