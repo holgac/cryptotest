@@ -41,23 +41,7 @@ void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t 
 void xor_arr(unsigned char *dst, unsigned char *src, size_t len);
 double bigram_fitness(unsigned char *data, size_t datalen);
 
-/*
- * Adds padding to the data to match blocklen-multiple length data.
- * data should have enough space to store datalen + blocklen
- * blocklen is in range of [1, 255].
- * padding is added even if datalen is a multiple of blocklen.
- */
 size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
-
-/**
- * unpad_pkcs7 - removes pkcs7 padding, returning actual length
- * @data: data to remove padding
- * @datalen: data length, including padding
- * @blocklen: block length
- *
- * returns -1 if padding is invalid according to blocklen
- * also, does not actually remove padding.
- */
 ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
 
 /*

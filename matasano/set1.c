@@ -9,6 +9,7 @@
 static void h2b(int argc, char **argv);
 static void b2b(int argc, char **argv);
 static void b2d(int argc, char **argv);
+static void pad(int argc, char **argv);
 struct command *construct_matasano_cmd()
 {
 	struct command *mst, *cmd;
@@ -32,6 +33,12 @@ struct command *construct_matasano_cmd()
 	strcpy(cmd->cmd, "b2d");
 	cmd->argcnt = 1;
 	cmd->perform = b2d;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "pad");
+	cmd->argcnt = 0;
+	cmd->perform = pad;
 	cmd->child = 0;
 	cmd->next = 0;
 	return mst;
@@ -80,7 +87,33 @@ static void b2d(int argc, char **argv)
 	printf("\nPlain: %s\n", (char *)data);
 }
 
-
+static void pad(int argc, char **argv)
+{
+	unsigned char data[32];
+	fill_random(data, 24);
+	if(pad_pkcs7(data, 24, 16) != 32) {
+		printf("Problem in padding\n");
+		exit(-1);
+	}
+	if(unpad_pkcs7(data, 32, 16) != 24) {
+		printf("Problem in unpadding\n");
+		exit(-1);
+	}
+	if(pad_pkcs7(data, 25, 16) != 32) {
+		printf("Problem in padding\n");
+		exit(-1);
+	}
+	if(unpad_pkcs7(data, 32, 16) != 25) {
+		printf("Problem in unpadding\n");
+		exit(-1);
+	}
+	data[28] = 2;
+	if(unpad_pkcs7(data, 32, 16) != -1) {
+		printf("Problem in unpadding\n");
+		exit(-1);
+	}
+	printf("All good\n");
+}
 
 
 

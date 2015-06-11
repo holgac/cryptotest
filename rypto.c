@@ -374,15 +374,6 @@ void hor_arrange(const unsigned char *data, size_t datalen, size_t vertsize, uns
 	}
 }
 
-size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen)
-{
-	unsigned char pad_size = blocklen - datalen % blocklen;
-	size_t i = 0;
-	for(i=0; i<pad_size; ++i)
-		data[datalen+i] = pad_size;
-	return datalen + pad_size;
-}
-
 void xor_arr(unsigned char *dst, unsigned char *src, size_t len)
 {
 	size_t i;
@@ -397,6 +388,15 @@ void fill_random(unsigned char *data, size_t len)
 		data[i] = rand()%256;
 }
 
+/**
+ * unpad_pkcs7 - removes pkcs7 padding, returning actual length
+ * @data: data to remove padding
+ * @datalen: data length, including padding
+ * @blocklen: block length
+ *
+ * returns -1 if padding is invalid according to blocklen
+ * also, does not actually remove padding.
+ */
 ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen)
 {
 	size_t guessed_len, i;
@@ -412,6 +412,26 @@ ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen)
 			return -1;
 	}
 	return guessed_len;
+}
+
+/**
+ * pad_pkcs7 - adds pkcs7 padding
+ * @data: data to be padded
+ * @datalen: data length
+ * @blocklen: block length
+ *
+ * Last n bytes of data will have the value n,
+ * to ensure data size is multiple of blocklen.
+ * If already multiple, adds blocklen of data,
+ * each byte having the value of blocklen.
+ */
+size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen)
+{
+	unsigned char pad_size = blocklen - datalen % blocklen;
+	size_t i = 0;
+	for(i=0; i<pad_size; ++i)
+		data[datalen+i] = pad_size;
+	return datalen + pad_size;
 }
 
 
