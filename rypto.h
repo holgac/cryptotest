@@ -23,7 +23,6 @@ extern int alphabet_en_primes[ALPHABET_EN_PRIME_LEN];
 extern double bigram_en[ALPHABET_EN_LEN][ALPHABET_EN_LEN];
 void load_bigrams();
 
-extern char *base64_map;
 extern unsigned char base64_rmap[128];
 
 int cipher_shift(unsigned char *data, size_t datalen, unsigned char *shiftdata,
@@ -70,13 +69,6 @@ void from_hex(const char *hex, size_t len, unsigned char *data);
  * data should have enough memory in advance
  */
 void to_hex(const unsigned char *data, size_t len, char *hex);
-/*
- * converts data of len len
- * to base64 of len ceil(len * 4/3)
- * base64 should have enough memory in advance.
- * TODO: add an out-size arg
- */
-void to_base64(const unsigned char *data, size_t len, char *base64);
 /*
  * convert base64 of len len
  * to data of ceil(len * 3/4)

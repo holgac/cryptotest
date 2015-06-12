@@ -8,6 +8,7 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include "../rypto.h"
+#include "../impl/util.h"
 #include "../impl/aes.h"
 
 static void aes_encrypt(int argc, char **argv);
@@ -116,7 +117,7 @@ static void aes_encrypt(int argc, char **argv)
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, plain, len, cipher, key, NULL);
 	to_hex(cipher, len, chex);
-	to_base64(cipher, len, cb64);
+	to_base64(cipher, len, cb64, NULL);
 	printf("Cipher: %s\nBase64: %s\n", chex, cb64);
 	free(opmod);
 }
@@ -139,7 +140,7 @@ static void aes_encrypt_hex(int argc, char **argv)
 	chex = alloca(len*2+1);
 	cb64 = alloca(4 * len / 3 + 1);
 	to_hex(cipher, len, chex);
-	to_base64(cipher, len, cb64);
+	to_base64(cipher, len, cb64, NULL);
 	printf("Cipher: %s\nBase64: %s\n", chex, cb64);
 	free(opmod);
 }

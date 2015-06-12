@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include "../rypto.h"
+#include "../impl/util.h"
 
 static void h2b(int argc, char **argv);
 static void b2h(int argc, char **argv);
@@ -62,8 +63,7 @@ static void h2b(int argc, char **argv)
 	data = alloca(hexlen/2 + 1);
 	from_hex(argv[0], hexlen, data);
 	base64 = alloca(2*hexlen/3 + 1);
-	base64[2*hexlen/3] = 0;
-	to_base64(data, hexlen/2, base64);
+	to_base64(data, hexlen/2, base64, NULL);
 	printf("%s\n", base64);
 }
 
@@ -91,8 +91,7 @@ static void b2b(int argc, char **argv)
 	data = alloca(3*base64len/4 + 1);
 	from_base64(argv[0], base64len, data);
 	base64 = alloca(base64len + 1);
-	base64[base64len] = 0;
-	to_base64(data, 3*base64len/4, base64);
+	to_base64(data, 3*base64len/4, base64, NULL);
 	printf("%s\n", base64);
 }
 

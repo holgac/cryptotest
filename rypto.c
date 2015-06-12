@@ -18,7 +18,6 @@ unsigned char alphabet_en[ALPHABET_EN_LEN] = {'A', 'B', 'C', 'D', 'E', 'F', 'G',
 
 int alphabet_en_primes[ALPHABET_EN_PRIME_LEN] = {1,3,5,7,9,11,15,17,19,21,23,25};
 double bigram_en[ALPHABET_EN_LEN][ALPHABET_EN_LEN];
-char *base64_map = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 unsigned char base64_rmap[128] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1,
@@ -221,34 +220,6 @@ void from_hex(const char *hex, size_t len, unsigned char *data)
 	size_t i;
 	for(i=0; i<len; i += 2)
 		data[i/2] = (hex_to_dec(hex[i])<<4) | (hex_to_dec(hex[i+1]));
-}
-static void pto_base64(unsigned char d1, unsigned char d2, unsigned char d3,
-		char *target)
-{
-		target[0] = base64_map[d1 >> 2];
-		target[1] = base64_map[((d1 & 0x3)<<4) | (d2 >> 4)];
-		target[2] = base64_map[((d2 & 0x0f)<< 2) | (d3 >> 6)];
-		target[3] = base64_map[d3 & 0x3f];
-}
-void to_base64(const unsigned char *data, size_t len, char *base64)
-{
-	ssize_t i, bi=0, ilen = len-2;
-	for(i=0; i<ilen; i+=3) {
-		pto_base64(data[i], data[i+1], data[i+2], base64+bi);
-		bi += 4;
-	}
-	if(i < len) {
-		unsigned char d1, d2=0;
-		d1 = data[i];
-		if(i < (len-1))
-			d2 = data[i+1];
-		pto_base64(d1, d2, 0, base64+bi);
-		if(i >= (len - 1))
-			base64[bi+2] = '=';
-		base64[bi+3] = '=';
-		bi += 4;
-	}
-	base64[bi] = 0;
 }
 void pto_hex(unsigned char data, char *hex)
 {
