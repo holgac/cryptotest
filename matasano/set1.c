@@ -7,6 +7,7 @@
 #include "../rypto.h"
 
 static void h2b(int argc, char **argv);
+static void b2h(int argc, char **argv);
 static void b2b(int argc, char **argv);
 static void b2d(int argc, char **argv);
 static void pad(int argc, char **argv);
@@ -21,6 +22,12 @@ struct command *construct_matasano_cmd()
 	strcpy(cmd->cmd, "h2b");
 	cmd->argcnt = 1;
 	cmd->perform = h2b;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "b2h");
+	cmd->argcnt = 1;
+	cmd->perform = b2h;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -59,6 +66,21 @@ static void h2b(int argc, char **argv)
 	to_base64(data, hexlen/2, base64);
 	printf("%s\n", base64);
 }
+
+static void b2h(int argc, char **argv)
+{
+	unsigned char *data;
+	size_t len;
+	char *hex;
+	len = strlen(argv[0]);
+	data = alloca(len);
+	from_base64(argv[0], len, data);
+	len = 3 * len / 4;
+	hex = alloca(len*2);
+	to_hex(data, len, hex);
+	printf("Hex: %s\n", hex);
+}
+
 
 static void b2b(int argc, char **argv)
 {

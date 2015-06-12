@@ -232,8 +232,8 @@ static void pto_base64(unsigned char d1, unsigned char d2, unsigned char d3,
 }
 void to_base64(const unsigned char *data, size_t len, char *base64)
 {
-	size_t bi=0, i;
-	for(i=0; i<(len-2); i+=3) {
+	ssize_t i, bi=0, ilen = len-2;
+	for(i=0; i<ilen; i+=3) {
 		pto_base64(data[i], data[i+1], data[i+2], base64+bi);
 		bi += 4;
 	}

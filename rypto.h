@@ -74,6 +74,7 @@ void to_hex(const unsigned char *data, size_t len, char *hex);
  * converts data of len len
  * to base64 of len ceil(len * 4/3)
  * base64 should have enough memory in advance.
+ * TODO: add an out-size arg
  */
 void to_base64(const unsigned char *data, size_t len, char *base64);
 /*
