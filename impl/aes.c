@@ -3,7 +3,7 @@
 #include "aes.h"
 #include "consts.h"
 
-static void invshift_row(unsigned char *data)
+static inline void invshift_row(unsigned char *data)
 {
 	unsigned char tmp;
 	tmp = data[9];
@@ -24,7 +24,7 @@ static void invshift_row(unsigned char *data)
 	data[15] = tmp;
 }
 
-static void invmix_column(unsigned char *data)
+static inline void invmix_column(unsigned char *data)
 {
 	unsigned char old[16];
 	size_t i;
@@ -37,7 +37,7 @@ static void invmix_column(unsigned char *data)
 	}
 }
 
-static void invsub_byte(unsigned char *data)
+static inline void invsub_byte(unsigned char *data)
 {
 	size_t i;
 	for(i=0; i<16; ++i)
@@ -66,7 +66,7 @@ static void calc_new_rk(unsigned char *rk, unsigned char *rc, unsigned char *out
 	*rc = gf_mult2(*rc);
 }
 
-static void sub_byte(unsigned char *data)
+static inline void sub_byte(unsigned char *data)
 {
 	size_t i;
 	for(i=0; i<16; ++i)
@@ -107,8 +107,8 @@ static void mix_column(unsigned char *data)
 	}
 }
 
-void aes_128_ecb_init(struct aes_opmod *opmod, const unsigned char *key,
-		const unsigned char *iv)
+static void aes_128_ecb_init(struct aes_opmod *opmod, const unsigned char *key,
+		const unsigned char *iv, size_t datalen)
 {
 	memcpy(opmod->context, key, 16);
 }
@@ -153,8 +153,8 @@ static void aes_128_ecb_decrypt(struct aes_opmod *opmod, unsigned char *data)
 	add_rk(data, rk);
 }
 
-void aes_128_cbc_init(struct aes_opmod *opmod, const unsigned char *key,
-		const unsigned char *iv)
+static void aes_128_cbc_init(struct aes_opmod *opmod, const unsigned char *key,
+		const unsigned char *iv, size_t len)
 {
 	memcpy(opmod->context, key, 16);
 	memcpy(opmod->context+16, iv, 16);
@@ -205,6 +205,45 @@ static void aes_128_cbc_decrypt(struct aes_opmod *opmod, unsigned char *data)
 	xor_arr(data, old_iv, 16);
 }
 
+struct aes_ctr128_data
+{
+	unsigned char key[16];
+	union {
+		unsigned char iv[16];
+		struct {
+			/* TODO: ensure little endian! */
+			long long nonce;
+			long long ctr;
+		};
+	};
+};
+
+static void aes_128_ctr_init(struct aes_opmod *opmod, const unsigned char *key,
+		const unsigned char *iv, size_t datalen)
+{
+	struct aes_ctr128_data *ctx = (struct aes_ctr128_data *)&opmod->context;
+	memcpy(ctx->key, key, 16);
+	memcpy(ctx->iv, iv, 16);
+	opmod->bs = datalen;
+}
+
+static void aes_128_ctr_encrypt(struct aes_opmod *opmod, unsigned char *data)
+{
+	struct aes_ctr128_data *ctx = (struct aes_ctr128_data *)&opmod->context;
+	size_t i;
+	unsigned char cur_nonce[16];
+	struct aes_opmod *fake_ecb;
+	fake_ecb = (struct aes_opmod*)(ctx->key - sizeof(struct aes_opmod));
+	for(i=0; i<opmod->bs; ++i) {
+		if((i%16) == 0) {
+			memcpy(cur_nonce, ctx->iv, 16);
+			aes_128_ecb_encrypt(fake_ecb, cur_nonce);
+			ctx->ctr += 1;
+		}
+		data[i] ^= cur_nonce[i%16];
+	}
+}
+
 
 /**
  * create_aes_opmod() - creates aes operation mod
@@ -233,6 +272,13 @@ struct aes_opmod *aes_create_opmod(int bit, int mod)
 			opmod->enc = aes_128_cbc_encrypt;
 			opmod->dec = aes_128_cbc_decrypt;
 			break;
+		case AES_OPMOD_CTR:
+			opmod = malloc(sizeof(*opmod) + sizeof(struct aes_ctr128_data));
+			opmod->padop = NULL;
+			opmod->init = aes_128_ctr_init;
+			opmod->enc = aes_128_ctr_encrypt;
+			opmod->dec = aes_128_ctr_encrypt;
+			break;
 		}
 	}
 	return opmod;
@@ -258,8 +304,8 @@ void aes_enc(struct aes_opmod *opmod, const unsigned char *plain, size_t len,
 	memcpy(cipher, plain, len);
 	if (opmod->padop)
 		len = opmod->padop(cipher, len, opmod->bs);
+	opmod->init(opmod, key, iv, len);
 	num_blocks = len/opmod->bs;
-	opmod->init(opmod, key, iv);
 	for (i=0; i<num_blocks; ++i) {
 		opmod->enc(opmod, cipher + i*opmod->bs);
 	}
@@ -285,8 +331,8 @@ void aes_dec(struct aes_opmod *opmod, const unsigned char *cipher, size_t len,
 	memcpy(plain, cipher, len);
 	if (opmod->padop)
 		len = opmod->padop(plain, len, opmod->bs);
+	opmod->init(opmod, key, iv, len);
 	num_blocks = len/opmod->bs;
-	opmod->init(opmod, key, iv);
 	for (i=0; i<num_blocks; ++i) {
 		opmod->dec(opmod, plain + i*opmod->bs);
 	}

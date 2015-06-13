@@ -23,6 +23,7 @@ static void aes_analyzes(int argc, char **argv);
 static void aes_analyzeh(int argc, char **argv);
 static void aes_cutpaste(int argc, char **argv);
 static void aes_bitflip(int argc, char **argv);
+static void aes_encctr(int argc, char **argv);
 
 struct command *construct_aes_cmd()
 {
@@ -71,6 +72,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "oracle");
 	cmd->argcnt = 0;
 	cmd->perform = aes_oracle;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "encctr");
+	cmd->argcnt = 1;
+	cmd->perform = aes_encctr;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -927,7 +934,25 @@ static void aes_cbcoracle(int argc, char **argv)
 		aes_cbcoracle_solvepart(i, key, iv);
 }
 
-
+static void aes_encctr(int argc, char **argv)
+{
+	struct aes_opmod *opmod;
+	unsigned char *raw, *res;
+	size_t len;
+	unsigned char iv[16];
+	char *key = "YELLOW SUBMARINE";
+	len = strlen(argv[0]);
+	raw = malloc(len);
+	from_base64(argv[0], len, raw, &len);
+	res = malloc(len);
+	memset(iv, 0, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CTR);
+	aes_enc(opmod, raw, len, res, (unsigned char *)key, iv);
+	printf("Result: %s\n", (char *)res);
+	free(res);
+	free(raw);
+	free(opmod);
+}
 
 
 

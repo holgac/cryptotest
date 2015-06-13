@@ -5,6 +5,7 @@
 #define AES_BIT_128 0
 #define AES_OPMOD_ECB 0
 #define AES_OPMOD_CBC 1
+#define AES_OPMOD_CTR 2
 
 /**
  * struct aes_opmod - AES operation context
@@ -19,7 +20,7 @@ struct aes_opmod {
 	size_t bs;
 	size_t (*padop)(unsigned char *data, size_t datalen, size_t blocklen);
 	void (*init)(struct aes_opmod *opmod, const unsigned char *key,
-			const unsigned char *iv);
+			const unsigned char *iv, size_t datalen);
 	void (*enc)(struct aes_opmod *opmod, unsigned char *data);
 	void (*dec)(struct aes_opmod *opmod, unsigned char *data);
 	unsigned char context[0];
