@@ -18,6 +18,7 @@ static void aes_decryptf(int argc, char **argv);
 static void aes_decryptfcbc(int argc, char **argv);
 static void aes_analyze(int argc, char **argv);
 static void aes_oracle(int argc, char **argv);
+static void aes_cbcoracle(int argc, char **argv);
 static void aes_analyzes(int argc, char **argv);
 static void aes_analyzeh(int argc, char **argv);
 static void aes_cutpaste(int argc, char **argv);
@@ -58,6 +59,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "decryptfcbc");
 	cmd->argcnt = 3;
 	cmd->perform = aes_decryptfcbc;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "cbcoracle");
+	cmd->argcnt = 0;
+	cmd->perform = aes_cbcoracle;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -305,6 +312,7 @@ static void aes_oracle(int argc, char **argv)
 		printf("Guessed %d, was actually %d\n", guess, mode);
 	else
 		printf("Correct guess!\n");
+	free(opmod);
 }
 
 static void unknown_cipherh(const unsigned char *plain, size_t len, 
@@ -328,6 +336,7 @@ static void unknown_cipherh(const unsigned char *plain, size_t len,
 	clen = pad_pkcs7(salted_plain, clen, 16);
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, salted_plain, clen, cipher, key, NULL);
+	free(opmod);
 	if(clen_out != NULL)
 		*clen_out = clen;
 }
@@ -351,6 +360,7 @@ static void unknown_cipher(const unsigned char *plain, size_t len,
 	clen = pad_pkcs7(salted_plain, clen, 16);
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, salted_plain, clen, cipher, key, NULL);
+	free(opmod);
 	if(clen_out != NULL)
 		*clen_out = clen;
 }
@@ -468,6 +478,7 @@ static void encode_profile(const char *email, const unsigned char *key, unsigned
 	len = pad_pkcs7(tmp, len, 16);
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, tmp, len, res, key, NULL);
+	free(opmod);
 	if(outlen)
 		*outlen = len;
 }
@@ -479,6 +490,7 @@ static void decode_profile(const unsigned char *cipher, size_t cipherlen, const 
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_dec(opmod, cipher, cipherlen, (unsigned char *)res, key, NULL);
 	len = unpad_pkcs7((unsigned char *)res, cipherlen, 16);
+	free(opmod);
 	if(len == -1) {
 		printf("Corrupt cipher!\n");
 		exit(-1);
@@ -761,6 +773,7 @@ static void encode_userdata(const char *userdata, unsigned char *res, size_t *le
 	udlen = pad_pkcs7(ud, udlen, 16);
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CBC);
 	aes_enc(opmod, ud, udlen, res, key, iv);
+	free(opmod);
 	if(len)
 		*len = udlen;
 }
@@ -775,6 +788,7 @@ static void decode_userdata(const unsigned char *cipher, size_t cipherlen,
 	aes_dec(opmod, cipher, cipherlen, (unsigned char *)res, key, iv);
 	plen = unpad_pkcs7((unsigned char *)res, cipherlen, 16);
 	res[plen] = 0;
+	free(opmod);
 	if(len)
 		*len = plen;
 }
@@ -808,6 +822,117 @@ static void aes_bitflip(int argc, char **argv)
 	}
 	printf("Success!\n");
 }
+
+static void aes_cbcoracle_encrypt(size_t idx, const unsigned char *key,
+		const unsigned char *iv, unsigned char *out, size_t *outlen)
+{
+	const char *plaintexts[] = {
+		"MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc=",
+		"MDAwMDAxV2l0aCB0aGUgYmFzcyBraWNrZWQgaW4gYW5kIHRoZSBWZWdhJ3MgYXJlIHB1bXBpbic=",
+		"MDAwMDAyUXVpY2sgdG8gdGhlIHBvaW50LCB0byB0aGUgcG9pbnQsIG5vIGZha2luZw==",
+		"MDAwMDAzQ29va2luZyBNQydzIGxpa2UgYSBwb3VuZCBvZiBiYWNvbg==",
+		"MDAwMDA0QnVybmluZyAnZW0sIGlmIHlvdSBhaW4ndCBxdWljayBhbmQgbmltYmxl",
+		"MDAwMDA1SSBnbyBjcmF6eSB3aGVuIEkgaGVhciBhIGN5bWJhbA==",
+		"MDAwMDA2QW5kIGEgaGlnaCBoYXQgd2l0aCBhIHNvdXBlZCB1cCB0ZW1wbw==",
+		"MDAwMDA3SSdtIG9uIGEgcm9sbCwgaXQncyB0aW1lIHRvIGdvIHNvbG8=",
+		"MDAwMDA4b2xsaW4nIGluIG15IGZpdmUgcG9pbnQgb2g=",
+		"MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93"
+	};
+	const char *cur_text = plaintexts[idx];
+	struct aes_opmod *opmod;
+	unsigned char raw[1024];
+	size_t rawlen;
+	int r;
+	r = from_base64(cur_text, strlen(cur_text), raw, &rawlen);
+	if(r)
+		printf("from_base64 failed\n");
+	rawlen = pad_pkcs7(raw, rawlen, 16);
+	/* for(r=0; r<rawlen; ++r)
+		printf("P%d[%d] = %lu (%c)\n", r/16, r%16,
+				(size_t)raw[r], (char)raw[r]); */
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CBC);
+	aes_enc(opmod, raw, rawlen, out, key, iv);
+	free(opmod);
+	if(outlen)
+		*outlen = rawlen;
+}
+
+static int aes_cbcoracle_checkpad(const unsigned char *cipher, size_t len,
+		const unsigned char *key, const unsigned char *iv)
+{
+	struct aes_opmod *opmod;
+	unsigned char plain[1024];
+	ssize_t r;
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CBC);
+	aes_dec(opmod, cipher, len, plain, key, iv);
+	free(opmod);
+	r = unpad_pkcs7(plain, len, 16);
+	if(r >= 0)
+		return 0;
+	return -1;
+}
+
+static void aes_cbcoracle_solvepart(size_t idx, const unsigned char *key,
+		const unsigned char *def_iv)
+{
+	unsigned char cipher[1024], plain[1024];
+	unsigned char modcipher[32], immediate[16], iv[16];
+	unsigned char *xor_block;
+	size_t clen, numblocks, curblock, curbyte, i, j;
+	memcpy(iv, def_iv, 16);
+	aes_cbcoracle_encrypt(idx, key, iv, cipher, &clen);
+	numblocks = clen/16;
+	for(curblock = numblocks-1; curblock<numblocks; --curblock) {
+		if(curblock == 0)
+			xor_block = iv;
+		else
+			xor_block = cipher + (curblock-1)*16;
+		/* randomize previous block*/
+		fill_random(modcipher, 16);
+		memcpy(modcipher + 16, cipher+curblock*16, 16);
+		for(i=0; i<16; ++i) {
+			curbyte = 15 - i;
+			for(j=0; j<i; ++j) {
+				modcipher[15-j] = immediate[15-j] ^ (i+1);
+			}
+			for(j=0; j<256; ++j) {
+				modcipher[curbyte] = j;
+				if(aes_cbcoracle_checkpad(modcipher, 32, key, iv)
+							== 0) {
+					if(i==0) {
+						modcipher[curbyte-1]++;
+						if(aes_cbcoracle_checkpad(modcipher, 32, key, iv)
+								!= 0)
+							continue;
+					}
+					immediate[curbyte] = j^(i+1);
+					plain[curblock*16 + curbyte] = j^(i+1)^xor_block[curbyte];
+					break;
+				}
+			}
+		}
+	}
+	clen = unpad_pkcs7(plain, clen, 16);
+	plain[clen] = 0;
+	printf("Plain of %lu: %s\n", idx, (char *)plain);
+}
+
+static void aes_cbcoracle(int argc, char **argv)
+{
+	unsigned char key[16], iv[16];
+	size_t i;
+	fill_random(key, 16);
+	fill_random(iv, 16);
+	for(i=0; i<10; ++i)
+		aes_cbcoracle_solvepart(i, key, iv);
+}
+
+
+
+
+
+
+
 
 
 
