@@ -59,11 +59,14 @@ static void h2b(int argc, char **argv)
 	size_t hexlen;
 	unsigned char *data;
 	char *base64;
+	int r;
 	hexlen = strlen(argv[0]);
 	data = alloca(hexlen/2 + 1);
 	from_hex(argv[0], hexlen, data);
 	base64 = alloca(2*hexlen/3 + 1);
-	to_base64(data, hexlen/2, base64, NULL);
+	r = to_base64(data, hexlen/2, base64, NULL);
+	if(r)
+		printf("ERROR");
 	printf("%s\n", base64);
 }
 
@@ -74,37 +77,34 @@ static void b2h(int argc, char **argv)
 	char *hex;
 	len = strlen(argv[0]);
 	data = alloca(len);
-	from_base64(argv[0], len, data);
-	len = 3 * len / 4;
+	from_base64(argv[0], len, data, &len);
 	hex = alloca(len*2);
 	to_hex(data, len, hex);
-	printf("Hex: %s\n", hex);
+	printf("%s\n", hex);
 }
 
 
 static void b2b(int argc, char **argv)
 {
-	size_t base64len;
+	size_t base64len, rawlen;
 	unsigned char *data;
 	char *base64;
 	base64len = strlen(argv[0]);
 	data = alloca(3*base64len/4 + 1);
-	from_base64(argv[0], base64len, data);
-	base64 = alloca(base64len + 1);
-	to_base64(data, 3*base64len/4, base64, NULL);
+	from_base64(argv[0], base64len, data, &rawlen);
+	base64 = alloca(base64len);
+	to_base64(data, rawlen, base64, NULL);
 	printf("%s\n", base64);
 }
 
 static void b2d(int argc, char **argv)
 {
-	size_t base64len, i;
+	size_t base64len;
 	unsigned char *data;
 	base64len = strlen(argv[0]);
 	data = alloca(3*base64len/4 + 1);
-	from_base64(argv[0], base64len, data);
+	from_base64(argv[0], base64len, data, NULL);
 	data[3*base64len/4] = 0;
-	for(i=0; i<(3*base64len/4); ++i)
-		printf("%0.2x", data[i]);
 	printf("\nPlain: %s\n", (char *)data);
 }
 

@@ -3,6 +3,7 @@
 
 
 int to_base64(const unsigned char *data, size_t len,
-		char *base64, size_t *outlen);
-
+		char *out, size_t *outlen);
+int from_base64(const char *base64, size_t len,
+		unsigned char *out, size_t *outlen);
 #endif

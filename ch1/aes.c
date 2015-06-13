@@ -181,8 +181,7 @@ static void aes_decryptf(int argc, char **argv)
 	cb64 = alloca(filestat.st_size);
 	len = read(fd, cb64, filestat.st_size);
 	cipher = alloca(3 * len / 4);
-	from_base64(cb64, len, cipher);
-	len = 3 * len / 4;
+	from_base64(cb64, len, cipher, &len);
 	plain = alloca(len+1);
 	plain[len] = 0;
 	key = (unsigned char *)argv[1];
@@ -207,8 +206,7 @@ static void aes_decryptfcbc(int argc, char **argv)
 	cb64 = alloca(filestat.st_size);
 	len = read(fd, cb64, filestat.st_size);
 	cipher = alloca(3 * len / 4);
-	from_base64(cb64, len, cipher);
-	len = 3 * len / 4;
+	from_base64(cb64, len, cipher, &len);
 	plain = alloca(len+1);
 	plain[len] = 0;
 	key = (unsigned char *)argv[1];
@@ -326,7 +324,7 @@ static void unknown_cipherh(const unsigned char *plain, size_t len,
 	salted_plain = alloca(clen + 16);
 	fill_random(salted_plain, randlen);
 	memcpy(salted_plain + randlen, plain, len);
-	from_base64(ub64, lenu, salted_plain+len+randlen);
+	from_base64(ub64, lenu, salted_plain+len+randlen, NULL);
 	clen = pad_pkcs7(salted_plain, clen, 16);
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, salted_plain, clen, cipher, key, NULL);
@@ -349,7 +347,7 @@ static void unknown_cipher(const unsigned char *plain, size_t len,
 	clen = lenub + len;
 	salted_plain = alloca(clen + 16);
 	memcpy(salted_plain, plain, len);
-	from_base64(ub64, lenu, salted_plain+len);
+	from_base64(ub64, lenu, salted_plain+len, NULL);
 	clen = pad_pkcs7(salted_plain, clen, 16);
 	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
 	aes_enc(opmod, salted_plain, clen, cipher, key, NULL);
