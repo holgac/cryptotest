@@ -79,6 +79,8 @@ void extended_euclid(long a, long b, long *out);
 
 size_t edit_dist(unsigned char *d1, unsigned char *d2, size_t len);
 
+int get_freqmap_idx(unsigned char c);
+
 #define CMDLEN 16
 
 struct command {

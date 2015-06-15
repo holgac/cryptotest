@@ -25,6 +25,7 @@ static void aes_cutpaste(int argc, char **argv);
 static void aes_bitflip(int argc, char **argv);
 static void aes_encctr(int argc, char **argv);
 static void aes_encctrhex(int argc, char **argv);
+static void aes_ctrstat(int argc, char **argv);
 
 struct command *construct_aes_cmd()
 {
@@ -73,6 +74,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "oracle");
 	cmd->argcnt = 0;
 	cmd->perform = aes_oracle;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "ctrstat");
+	cmd->argcnt = 1;
+	cmd->perform = aes_ctrstat;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -985,7 +992,63 @@ static void aes_encctrhex(int argc, char **argv)
 	free(opmod);
 }
 
+static void aes_ctrstat(int argc, char **argv)
+{
+	char buf[1024];
+	unsigned char *ciphers[60], raw[1024], *xor_key;
+	unsigned char key[16], iv[16];
+	FILE *inp;
+	size_t i, j, k, len, minlen=1024;
+	struct aes_opmod *opmod;
+	double freqmap[FREQMAP_LEN], invlen = 1.0 / 60, score, max_score;
+	size_t max_score_byte;
+	int freq_idx;
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CTR);
+	fill_random(key, 16);
+	memset(iv, 0, 16);
+	inp = fopen(argv[0], "r");
+	for(i=0; i<60; ++i) {
+		fgets(buf, 1024, inp);
+		len = strlen(buf)-1;
+		from_base64(buf, len, raw, &len);
+		ciphers[i] = malloc(len);
+		aes_enc(opmod, raw, len, ciphers[i], key, iv);
+		minlen = min(minlen, len);
+	}
+	xor_key = malloc(minlen);
 
+	for(i=0; i<minlen; ++i) {
+		printf("S[%lu]:\n", i);
+		max_score = 0;
+		for(j=0; j<256; ++j) {
+			for(k=0; k<FREQMAP_LEN; ++k)
+				freqmap[k] = 0.0;
+			for(k=0; k<60; ++k) {
+				freq_idx = get_freqmap_idx(j ^ ciphers[k][i]);
+				if(freq_idx != -1)
+					freqmap[k] += invlen;
+				score = freqmap_comp(freqmap, freqmap_en);
+				if(score > max_score) {
+					max_score = score;
+					max_score_byte = j;
+				}
+			}
+		}
+		printf("\t%lu with score %lf\n", max_score_byte, max_score);
+		xor_key[i] = max_score_byte;
+	}
+	
+	for(i=0; i<60; ++i) {
+		memcpy(buf, ciphers[i], minlen);
+		xor_arr((unsigned char *)buf, xor_key, minlen);
+		buf[minlen] = 0;
+		printf("String %lu: %s\n", i, buf);
+		free(ciphers[i]);
+	}
+	free(xor_key);
+	free(opmod);
+
+}
 
 
 

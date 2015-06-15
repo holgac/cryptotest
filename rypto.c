@@ -58,7 +58,8 @@ static ssize_t find_in_data(unsigned char *alphabet, size_t len, unsigned char c
 			return i;
 	return -1;
 }
-static int get_freqmap_idx(unsigned char c)
+
+int get_freqmap_idx(unsigned char c)
 {
 	if(c >= 'A' && c <= 'Z')
 		return c-'A';
@@ -68,6 +69,7 @@ static int get_freqmap_idx(unsigned char c)
 		return FREQMAP_SPACE;
 	return -1;
 }
+
 double bigram_fitness(unsigned char *data, size_t datalen)
 {
 	double cur_fitness = 0;
@@ -88,7 +90,7 @@ double bigram_fitness(unsigned char *data, size_t datalen)
 void freqmap_pcalc_xor(unsigned char *data, size_t datalen, unsigned char k, size_t interval, double *out)
 {
 	size_t i;
-	double fact;
+	double fact = interval * 1.0 / datalen;
 	for(i=0; i<FREQMAP_LEN; ++i)
 		out[i] = 0.0;
 	for(i=0; i<datalen; i += interval) {
@@ -99,7 +101,6 @@ void freqmap_pcalc_xor(unsigned char *data, size_t datalen, unsigned char k, siz
 		if(idx != -1)
 			out[(size_t)idx] += 1;
 	}
-	fact = interval * 1.0 / datalen;
 	for(i=0; i<FREQMAP_LEN; ++i)
 		out[i] *= fact;
 }
