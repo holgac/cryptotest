@@ -79,8 +79,6 @@ void extended_euclid(long a, long b, long *out);
 
 size_t edit_dist(unsigned char *d1, unsigned char *d2, size_t len);
 
-void fill_random(unsigned char *data, size_t len);
-
 #define CMDLEN 16
 
 struct command {

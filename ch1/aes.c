@@ -24,6 +24,7 @@ static void aes_analyzeh(int argc, char **argv);
 static void aes_cutpaste(int argc, char **argv);
 static void aes_bitflip(int argc, char **argv);
 static void aes_encctr(int argc, char **argv);
+static void aes_encctrhex(int argc, char **argv);
 
 struct command *construct_aes_cmd()
 {
@@ -72,6 +73,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "oracle");
 	cmd->argcnt = 0;
 	cmd->perform = aes_oracle;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "encctrhex");
+	cmd->argcnt = 2;
+	cmd->perform = aes_encctrhex;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -951,6 +958,30 @@ static void aes_encctr(int argc, char **argv)
 	printf("Result: %s\n", (char *)res);
 	free(res);
 	free(raw);
+	free(opmod);
+}
+
+static void aes_encctrhex(int argc, char **argv)
+{
+	struct aes_opmod *opmod;
+	unsigned char *raw, *res;
+	size_t len;
+	unsigned char iv[16], key[16];
+	char *reshex;
+	from_hex(argv[1], 32, key);
+	len = strlen(argv[0]);
+	raw = malloc(len);
+	from_base64(argv[0], len, raw, &len);
+	res = malloc(len);
+	memset(iv, 0, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CTR);
+	aes_enc(opmod, raw, len, res, (unsigned char *)key, iv);
+	reshex = malloc(len*2+1);
+	to_hex(res, len, reshex);
+	printf("%s\n", reshex);
+	free(res);
+	free(raw);
+	free(reshex);
 	free(opmod);
 }
 

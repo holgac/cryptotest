@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdlib.h>
 #include <errno.h>
 #include "util.h"
 #include "consts.h"
@@ -106,6 +107,21 @@ int from_base64(const char *base64, size_t len,
 	if(outlen)
 		*outlen = olen;
 	return 0;
+}
+
+/**
+ * fill_random - fills the data with random values
+ * @data: data to be filled
+ * @len: length of data
+ *
+ * Randomization is currently with rand()
+ * TODO: use MT19937
+ */
+void fill_random(unsigned char *data, size_t len)
+{
+	size_t i;
+	for(i=0; i<len; ++i)
+		data[i] = rand()%256;
 }
 
 

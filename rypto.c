@@ -320,13 +320,6 @@ void xor_arr(unsigned char *dst, const unsigned char *src, size_t len)
 		dst[i] ^= src[i];
 }
 
-void fill_random(unsigned char *data, size_t len)
-{
-	size_t i;
-	for(i=0; i<len; ++i)
-		data[i] = rand()%256;
-}
-
 /**
  * unpad_pkcs7 - removes pkcs7 padding, returning actual length
  * @data: data to remove padding

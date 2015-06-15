@@ -122,7 +122,7 @@ static void xor_analyzefile(int argc, char **argv)
 	base64 = alloca(filestat.st_size);
 	datalen = read(fd, base64, filestat.st_size);
 	data = alloca(3 * datalen / 4);
-	from_base64(base64, datalen-1, data, &datalen);
+	from_base64(base64, datalen, data, &datalen);
 	datalen = 3 * datalen / 4;
 	plain = alloca(datalen+1);
 	plain[datalen] = 0;
