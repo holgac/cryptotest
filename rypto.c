@@ -22,6 +22,11 @@ double bigram_en[ALPHABET_EN_LEN][ALPHABET_EN_LEN];
 void init()
 {
 	srand(time(NULL));
+	if(sizeof(u64) != 8 || sizeof(u32) != 4 || sizeof(u16) != 2 || sizeof(u8) != 1
+		|| sizeof(s64) != 8 || sizeof(s32) != 4 || sizeof(s16) != 2
+		|| sizeof(s8) != 1) {
+		printf("Typedefs are not properly implemented for this system!\n");
+	}
 }
 void cleanup()
 {

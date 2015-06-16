@@ -2,10 +2,20 @@
 #define RYPTO_H_
 
 #include <stddef.h>
+#include <sys/types.h>
 
 void init();
 void cleanup();
 
+/* TODO: 32bit systems */
+typedef unsigned long u64;
+typedef unsigned int u32;
+typedef unsigned short u16;
+typedef unsigned char u8;
+typedef long s64;
+typedef int s32;
+typedef short s16;
+typedef char s8;
 
 #define FREQMAP_SPACE 26
 #define FREQMAP_LEN 27

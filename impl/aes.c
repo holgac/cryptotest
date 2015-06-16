@@ -212,8 +212,8 @@ struct aes_ctr128_data
 		unsigned char iv[16];
 		struct {
 			/* TODO: ensure little endian! */
-			long long nonce;
-			long long ctr;
+			u64 nonce;
+			u64 ctr;
 		};
 	};
 };
