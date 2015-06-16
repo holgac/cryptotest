@@ -15,6 +15,7 @@ static void b2d(int argc, char **argv);
 static void pad(int argc, char **argv);
 static void mtgen(int argc, char **argv);
 static void mtseed(int argc, char **argv);
+static void mtclone(int argc, char **argv);
 struct command *construct_matasano_cmd()
 {
 	struct command *mst, *cmd;
@@ -38,6 +39,12 @@ struct command *construct_matasano_cmd()
 	strcpy(cmd->cmd, "b2b");
 	cmd->argcnt = 1;
 	cmd->perform = b2b;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "mtclone");
+	cmd->argcnt = 0;
+	cmd->perform = mtclone;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -223,6 +230,56 @@ static void mtseed(int argc, char **argv)
 			printf("Wrong guess!\n");
 	}
 }
+
+static u32 untamper(u32 y)
+{
+	y ^= y >> 18;
+	y ^= (y<<15) & 0xefc60000;
+	y ^= ((y & 0xf)<<7) & 0x9d2c5680;
+	y ^= ((y & 0x7f0)<<7) & 0x9d2c5680;
+	y ^= ((y & 0x3f800)<<7) & 0x9d2c5680;
+	y ^= ((y & 0x1fc0000)<<7) & 0x9d2c5680;
+	return y;
+}
+
+static void mtclone(int argc, char **argv)
+{
+	struct mt19937 mt, cmt;
+	u32 *vals;
+	size_t i;
+	vals = malloc(sizeof(u32) * 624);
+	mt19937_init(&mt, time(NULL));
+	for(i=0; i<624; ++i) {
+		vals[i] = mt19937_gen(&mt);
+		cmt.state[i] = untamper(vals[i]);
+	}
+	cmt.idx = 1;
+	for(i=1; i<624; ++i) {
+		if(mt19937_gen(&cmt) != vals[i]) {
+			printf("copy failure: %lu!\n", i);
+			exit(-1);
+		}
+	}
+	for(i=0; i<624; ++i) {
+		if(mt19937_gen(&mt) != mt19937_gen(&cmt)) {
+			printf("next-batch error: %lu\n", i);
+			exit(-1);
+		}
+	}
+	printf("Copy success!\n");
+	free(vals);
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
