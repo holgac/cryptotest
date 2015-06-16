@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "aes.h"
+#include "util.h"
 #include "consts.h"
 
 static inline void invshift_row(unsigned char *data)

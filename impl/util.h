@@ -21,6 +21,7 @@ int from_base64(const char *base64, size_t len,
 
 void fill_random(unsigned char *data, size_t len);
 
+void xor_arr(u8 *dst, const u8 *src, size_t len);
 
 
 #endif

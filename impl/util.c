@@ -124,6 +124,20 @@ void fill_random(unsigned char *data, size_t len)
 		data[i] = rand()%256;
 }
 
+/**
+ * xor_arr - xors given memory segments
+ * @dst: xor destination (to be xorred with @src)
+ * @src: xor source (unmodified)
+ * @len: length of memory segments
+ */
+void xor_arr(u8 *dst, const u8 *src, size_t len)
+{
+	size_t i;
+	for(i=0; i<len; ++i)
+		dst[i] ^= src[i];
+}
+
+
 
 
 

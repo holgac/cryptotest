@@ -1,4 +1,6 @@
+#include <string.h>
 #include "prng.h"
+#include "util.h"
 
 /**
  * mt19937_init - initializes mt instance
@@ -28,7 +30,7 @@ u32 mt19937_gen(struct mt19937 *mt)
 	if(mt->idx == 0) {
 		for(i=0; i<624; ++i) {
 			y = (mt->state[i] & 0x80000000) + (mt->state[(i+1)%624] & 0x7fffffff);
-			mt->state[i] = mt->state[(i+397)%624] ^ (y>>1) ^ (y%2)*0x9908b0df;
+			mt->state[i] = mt->state[(i+397)%624] ^ (y>>1) ^ (y&1)*0x9908b0df;
 		}
 	}
 	y = mt->state[mt->idx];
@@ -39,21 +41,76 @@ u32 mt19937_gen(struct mt19937 *mt)
 	return y;
 }
 
+static void mt19937c_genall(struct mt19937_cached *mt)
+{
+	size_t i;
+	u32 y;
+	for(i=0; i<624; ++i) {
+		y = (mt->mt.state[i] & 0x80000000) + (mt->mt.state[(i+1)%624] & 0x7fffffff);
+		mt->mt.state[i] = mt->mt.state[(i+397)%624] ^ (y>>1) ^ (y&1)*0x9908b0df;
+		y = mt->mt.state[i];
+		y ^= (y<<7) & 0x9d2c5680;
+		y ^= (y<<15) & 0xefc60000;
+		y ^= y >> 18;
+		mt->vals_u32[i] = y;
+	}
+	mt->mt.idx = 0;	
+}
+
 /**
- * mt19937_fill - fills the given data with random bytes
- * @mt: mt instance
- * @ptr: data to be filled
+ * mt19937c_init - initializes cached mt instance
+ * @mt: mt instance (should be allocated externally)
+ * @seed: initial seed
+ */
+void mt19937c_init(struct mt19937_cached *mt, u32 seed)
+{
+	mt19937_init(&mt->mt, seed);
+	mt19937c_genall(mt);
+}
+
+/**
+ * mt19937c_fill - fills the given memory segment with random data
+ * @mt: MT instance
+ * @ptr: pointer to the memory segment
  * @len: length of data in bytes
  *
- * given data should be properly aligned to store unsigned int,
- * len also should be a multiple of 4.
+ * This function has no alignment restrictions at all.
  */
-void mt19937_fill(struct mt19937 *mt, void *ptr, size_t len)
+void mt19937c_fill(struct mt19937_cached *mt, void *ptr, size_t len)
 {
-	u32 *p = ptr;
-	size_t i, plen = len/4;
-	for(i=0; i<plen; i++) {
-		p[i] = mt19937_gen(mt);
+	size_t avlen;
+	u8 *p = ptr;
+	while(len) {
+		avlen = 624*4 - mt->mt.idx;
+		if(len >= avlen) {
+			len -= avlen;
+			memcpy(p, mt->vals + mt->mt.idx, avlen);
+			mt19937c_genall(mt);
+			p += avlen;
+		} else {
+			memcpy(p, mt->vals + mt->mt.idx, len);
+			mt->mt.idx += len;
+			len = 0;
+		}
+	}
+}
+
+void mt19937c_xor(struct mt19937_cached *mt, u8 *ptr, size_t len)
+{
+	size_t avlen;
+	u8 *p = ptr;
+	while(len) {
+		avlen = 624*4 - mt->mt.idx;
+		if(len >= avlen) {
+			len -= avlen;
+			xor_arr(p, mt->vals + mt->mt.idx, avlen);
+			mt19937c_genall(mt);
+			p += avlen;
+		} else {
+			xor_arr(p, mt->vals + mt->mt.idx, len);
+			mt->mt.idx += len;
+			len = 0;
+		}
 	}
 }
 

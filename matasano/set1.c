@@ -16,6 +16,10 @@ static void pad(int argc, char **argv);
 static void mtgen(int argc, char **argv);
 static void mtseed(int argc, char **argv);
 static void mtclone(int argc, char **argv);
+static void mtcip(int argc, char **argv);
+static void mtgenpass(int argc, char **argv);
+static void mtchkpass(int argc, char **argv);
+
 struct command *construct_matasano_cmd()
 {
 	struct command *mst, *cmd;
@@ -39,6 +43,24 @@ struct command *construct_matasano_cmd()
 	strcpy(cmd->cmd, "b2b");
 	cmd->argcnt = 1;
 	cmd->perform = b2b;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "mtchkpass");
+	cmd->argcnt = 1;
+	cmd->perform = mtchkpass;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "mtgenpass");
+	cmd->argcnt = 0;
+	cmd->perform = mtgenpass;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "mtcip");
+	cmd->argcnt = 0;
+	cmd->perform = mtcip;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -160,15 +182,20 @@ static void pad(int argc, char **argv)
 
 static void mtgen(int argc, char **argv)
 {
-	u32 seed, val;
+	u32 seed, val, val2;
 	size_t cnt, i;
 	struct mt19937 mt;
+	struct mt19937_cached cmt;
 	seed = atol(argv[0]);
 	cnt = atoi(argv[1]);
 	mt19937_init(&mt, seed);
+	mt19937c_init(&cmt, seed);
 	for(i=0; i<cnt; ++i) {
 		val = mt19937_gen(&mt);
 		printf("%u ", val);
+		mt19937c_fill(&cmt, &val2, sizeof(u32));
+		if(val != val2)
+			printf("val != val2: %x != %x\n", val, val2);
 	}
 	printf("\n");
 }
@@ -270,9 +297,76 @@ static void mtclone(int argc, char **argv)
 	free(vals);
 }
 
+static void mtcip(int argc, char **argv)
+{
+	struct mt19937_cached *mt;
+	u16 seed;
+	size_t i, randlen, datalen;
+	u8 data[64], res[14];
+	seed = rand();
+	randlen = 10+rand()%32;
+	datalen = randlen + 14;
+	fill_random(data, randlen);
+	memset(data+randlen, 'A', 14);
+	mt = malloc(sizeof(*mt));
+	mt19937c_init(mt, seed);
+	mt19937c_xor(mt, data, datalen);
+	memset(res, 'A', 14);
+	xor_arr(res, data+randlen, 14);
 
+	for(i=0; i<0x10000; ++i) {
+		mt19937c_init(mt, i);
+		mt19937c_fill(mt, data, datalen);
+		if(memcmp(data+randlen, res, 14) == 0) {
+			printf("Found!\n");
+			if(i != seed) {
+				printf("Mistaken!\n");
+			}
+			break;
+		}
+	}
+	free(mt);
+}
 
+static void mtgenpass(int argc, char **argv)
+{
+	struct timeval tv;
+	struct mt19937_cached *mt;
+	u8 randdata[32];
+	char base64[64];
+	mt = malloc(sizeof(*mt));
+	gettimeofday(&tv, NULL);
+	mt19937c_init(mt, tv.tv_sec);
+	mt19937c_fill(mt, randdata, 32);
+	to_base64(randdata, 32, base64, NULL);
+	printf("%s\n", base64);
+	free(mt);
+}
 
+static void mtchkpass(int argc, char **argv)
+{
+	struct timeval tv;
+	struct mt19937_cached *mt;
+	size_t len, i;
+	u8 rawdata[64];
+	u8 chkdata[64];
+
+	mt = malloc(sizeof(*mt));
+	gettimeofday(&tv, NULL);
+	from_base64(argv[0], strlen(argv[0]), rawdata, &len);
+	for(i=0; i<(60*60*24); ++i) {
+		mt19937c_init(mt, tv.tv_sec-i);
+		mt19937c_fill(mt, chkdata, len);
+		if(memcmp(chkdata, rawdata, len) == 0) {
+			printf("Generated %lu seconds (%lu min) ago!\n", i, i/60);
+			break;
+		}
+	}
+	if(i == (60*60*24)) {
+		printf("Not generated today!\n");
+	}
+	free(mt);
+}
 
 
 
