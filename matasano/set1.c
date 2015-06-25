@@ -149,7 +149,7 @@ static void b2d(int argc, char **argv)
 	data = alloca(3*base64len/4 + 1);
 	from_base64(argv[0], base64len, data, NULL);
 	data[3*base64len/4] = 0;
-	printf("\nPlain: %s\n", (char *)data);
+	printf("Plain: %s\n", (char *)data);
 }
 
 static void pad(int argc, char **argv)

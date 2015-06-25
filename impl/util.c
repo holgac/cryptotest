@@ -70,6 +70,7 @@ static int pfrom_base64(char c1, char c2, char c3, char c4, unsigned char *data)
  * @outlen: out length, may be null.
  *
  * @out should have enough memory to store ceil(len*3/4) of data.
+ * This method can perform inline conversion.
  */
 int from_base64(const char *base64, size_t len,
 		unsigned char *out, size_t *outlen)

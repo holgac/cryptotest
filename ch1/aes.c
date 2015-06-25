@@ -26,6 +26,7 @@ static void aes_bitflip(int argc, char **argv);
 static void aes_encctr(int argc, char **argv);
 static void aes_encctrhex(int argc, char **argv);
 static void aes_ctrstat(int argc, char **argv);
+static void aes_breakctr(int argc, char **argv);
 
 struct command *construct_aes_cmd()
 {
@@ -74,6 +75,12 @@ struct command *construct_aes_cmd()
 	strcpy(cmd->cmd, "oracle");
 	cmd->argcnt = 0;
 	cmd->perform = aes_oracle;
+	cmd->child = 0;
+	cmd->next = malloc(sizeof(struct command));
+	cmd = cmd->next;
+	strcpy(cmd->cmd, "breakctr");
+	cmd->argcnt = 1;
+	cmd->perform = aes_breakctr;
 	cmd->child = 0;
 	cmd->next = malloc(sizeof(struct command));
 	cmd = cmd->next;
@@ -1050,7 +1057,55 @@ static void aes_ctrstat(int argc, char **argv)
 
 }
 
+static void aes_breakctr_edit(unsigned char *cipher, size_t idx,
+		unsigned char newval, const unsigned char *keystream)
+{
+	cipher[idx] = newval ^ keystream[idx];
+}
 
+static void aes_breakctr(int argc, char **argv)
+{
+	char *ys = "YELLOW SUBMARINE";
+	unsigned char key[16], iv[16];
+	struct aes_opmod *opmod;
+	unsigned char *keystream, *zero, *cipher, *plain, *cipherb64;
+	size_t flen, i;
+	unsigned char u;
+	memcpy(key, ys, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_ECB);
+	read_file(argv[0], &cipherb64, &flen);
+	cipher = malloc(flen);
+	from_base64((const char *)cipherb64, flen, cipher, &flen);
+	free(cipherb64);
+	plain = malloc(flen);
+	aes_dec(opmod, cipher, flen, plain, key, NULL);
+	free(opmod);
+	fill_random(key, 16);
+	fill_random(iv, 16);
+	opmod = aes_create_opmod(AES_BIT_128, AES_OPMOD_CTR);
+	keystream = malloc(flen);
+	zero = malloc(flen);
+	memset(zero, 0, flen);
+	aes_enc(opmod, zero, flen, keystream, key, iv);
+	free(opmod);
+	free(zero);
+	memcpy(cipher, plain, flen);
+	xor_arr(cipher, keystream, flen);
+	for(i=0; i<flen; ++i) {
+		u = cipher[i];
+		aes_breakctr_edit(cipher, i, 0, keystream);
+		u ^= cipher[i];
+		if(u != plain[i]) {
+			printf("Wrong guess\n");
+			exit(-1);
+		}
+	}
+	plain[flen] = 0;
+	printf("Guessed/correct plaintest: %s\n", (char *)plain);
+	free(plain);
+	free(keystream);
+	free(cipher);
+}
 
 
 

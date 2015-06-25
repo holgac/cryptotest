@@ -2,6 +2,7 @@
 #define UTIL_H_
 
 #include "prng.h"
+#include "fio.h"
 
 #define max(a,b) \
 	({ __typeof__ (a) _a = (a); \
