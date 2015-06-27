@@ -48,9 +48,6 @@ void cipher_xor(unsigned char *data, size_t datalen, unsigned char *key, size_t 
 
 double bigram_fitness(unsigned char *data, size_t datalen);
 
-size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
-ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
-
 /*
  * horizontally rearranges memory so that
  * out[0] = data[0]

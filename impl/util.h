@@ -24,5 +24,8 @@ void fill_random(unsigned char *data, size_t len);
 
 void xor_arr(u8 *dst, const u8 *src, size_t len);
 
+size_t pad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
+
+ssize_t unpad_pkcs7(unsigned char *data, size_t datalen, size_t blocklen);
 
 #endif
